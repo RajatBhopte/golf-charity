@@ -1,0 +1,127 @@
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,200..800;1,200..800&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  * {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+  }
+
+  html {
+    scroll-behavior: smooth;
+  }
+
+  body {
+    font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  /* Dark mode (default) */
+  .dark body,
+  .dark {
+    background-color: #0a0f1a;
+    color: #e2e8f0;
+  }
+
+  /* Light mode */
+  body {
+    background-color: #f8fafc;
+    color: #0f172a;
+  }
+
+  .dark body {
+    background-color: #0a0f1a;
+    color: #e2e8f0;
+  }
+}
+
+@layer components {
+  .btn-primary {
+    @apply px-8 py-4 bg-brand-500 hover:bg-brand-600 text-white font-semibold rounded-xl transition-all duration-300 ease-out hover:shadow-lg hover:shadow-brand-500/25 active:scale-[0.98];
+  }
+
+  .btn-secondary {
+    @apply px-8 py-4 border border-brand-500/30 text-brand-400 hover:bg-brand-500/10 font-semibold rounded-xl transition-all duration-300;
+  }
+
+  .dark .btn-secondary {
+    @apply border-brand-500/30 text-brand-400 hover:bg-brand-500/10;
+  }
+
+  .light .btn-secondary,
+  :not(.dark) .btn-secondary {
+    @apply border-brand-600 text-brand-600 hover:bg-brand-50;
+  }
+
+  .glass-card {
+    @apply rounded-2xl border backdrop-blur-sm transition-all duration-300;
+  }
+
+  .dark .glass-card {
+    @apply bg-dark-card/80 border-dark-border hover:border-brand-500/30;
+  }
+
+  :not(.dark) .glass-card {
+    @apply bg-white border-light-border hover:border-brand-500/30 shadow-sm hover:shadow-md;
+  }
+
+  .section-padding {
+    @apply px-4 sm:px-6 lg:px-8 py-16 sm:py-20 lg:py-24;
+  }
+
+  .container-max {
+    @apply max-w-7xl mx-auto;
+  }
+
+  .gradient-text {
+    @apply bg-clip-text text-transparent bg-gradient-to-r from-brand-400 to-brand-600;
+  }
+
+  .dark .gradient-text {
+    @apply from-brand-400 to-brand-600;
+  }
+
+  :not(.dark) .gradient-text {
+    @apply from-brand-600 to-brand-800;
+  }
+}
+
+@layer utilities {
+  .text-balance {
+    text-wrap: balance;
+  }
+}
+
+/* Custom scrollbar */
+.dark ::-webkit-scrollbar {
+  width: 8px;
+}
+.dark ::-webkit-scrollbar-track {
+  background: #0a0f1a;
+}
+.dark ::-webkit-scrollbar-thumb {
+  background: #1e293b;
+  border-radius: 4px;
+}
+.dark ::-webkit-scrollbar-thumb:hover {
+  background: #334155;
+}
+
+::-webkit-scrollbar {
+  width: 8px;
+}
+::-webkit-scrollbar-track {
+  background: #f8fafc;
+}
+::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
