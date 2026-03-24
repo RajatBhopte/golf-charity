@@ -1,33 +1,14 @@
-import { useState } from 'react';
+/* eslint-disable no-unused-vars */
+import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
 import api from '../utils/api';
-import { User, Mail, Lock, AlertCircle, ArrowRight, ArrowLeft, CheckCircle, Heart } from 'lucide-react';
+import { buildApiUrl } from '../utils/apiBase';
+import { User, Mail, Lock, AlertCircle, ArrowRight, CheckCircle, Heart } from 'lucide-react';
 import Navbar from '../components/Navbar';
-
-const DUMMY_CHARITIES = [
-  {
-    id: 'charity-1',
-    name: 'Tee Off For Teens',
-    description: 'Youth golf programs for underprivileged children.',
-    icon: '⛳'
-  },
-  {
-    id: 'charity-2',
-    name: 'Green Greens Initiative',
-    description: 'Environmental conservation for public golf courses.',
-    icon: '🌳'
-  },
-  {
-    id: 'charity-3',
-    name: 'Veterans on the Course',
-    description: 'Rehabilitation through golf for wounded veterans.',
-    icon: '🎖️'
-  }
-];
 
 export default function Signup() {
   const { signup, loginWithGoogle } = useAuth();
@@ -36,18 +17,19 @@ export default function Signup() {
   const [step, setStep] = useState(1);
   const [error, setError] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [charities, setCharities] = useState([]);
+  const [charitiesLoading, setCharitiesLoading] = useState(true);
 
-  // Form State
   const [formData, setFormData] = useState({
     fullName: '',
     email: '',
     password: '',
-    plan: 'monthly', // 'monthly' | 'yearly'
-    charityId: DUMMY_CHARITIES[0].id,
+    plan: 'monthly',
+    charityId: '',
     charityPercentage: 10,
   });
 
-  const { register, handleSubmit, formState: { errors }, trigger } = useForm();
+  const { register, formState: { errors }, trigger } = useForm();
 
   const baseInputStyles = `block w-full pl-10 pr-3 py-3 rounded-xl border text-sm transition-colors focus:ring-2 focus:ring-brand-500 focus:outline-none ${
     isDark
@@ -55,25 +37,46 @@ export default function Signup() {
       : 'bg-white border-light-border text-light-text focus:border-brand-500'
   }`;
 
+  useEffect(() => {
+    const fetchCharities = async () => {
+      try {
+        const response = await fetch(buildApiUrl('/charities'));
+        const data = await response.json();
+        if (!response.ok) {
+          throw new Error(data.error || 'Failed to load charities');
+        }
+
+        const charityList = Array.isArray(data?.charities) ? data.charities : [];
+        setCharities(charityList);
+        setFormData((current) => ({
+          ...current,
+          charityId: current.charityId || charityList[0]?.id || '',
+        }));
+      } catch (err) {
+        setError(err.message || 'Unable to load charities right now.');
+      } finally {
+        setCharitiesLoading(false);
+      }
+    };
+
+    fetchCharities();
+  }, []);
+
   const handleNextStep = async () => {
     const isValid = await trigger();
     if (isValid) {
-      setStep(prev => prev + 1);
+      setStep((prev) => prev + 1);
       setError(null);
     }
   };
 
   const handlePrevStep = () => {
-    setStep(prev => prev - 1);
+    setStep((prev) => prev - 1);
     setError(null);
   };
 
   const handleGoogleSignup = async () => {
     try {
-      // NOTE: OAuth redirect interrupts the flow.
-      // After OAuth, users would need a "Complete Profile" page to choose plan/charity.
-      // For Phase 2, we just trigger OAuth to show it works, but a robust app
-      // would intercept the user post-login to force them to pick a plan.
       const { error: authError } = await loginWithGoogle();
       if (authError) throw authError;
     } catch (err) {
@@ -81,12 +84,31 @@ export default function Signup() {
     }
   };
 
+  const goToCharityStep = () => {
+    if (charitiesLoading) {
+      setError('Please wait for charities to finish loading.');
+      return;
+    }
+
+    if (!charities.length) {
+      setError('No charities are available yet. Ask an admin to add one first.');
+      return;
+    }
+
+    setStep(3);
+    setError(null);
+  };
+
   const handleFinalSubmit = async () => {
+    if (!formData.charityId) {
+      setError('Please choose a charity before creating your account.');
+      return;
+    }
+
     setIsLoading(true);
     setError(null);
 
     try {
-      // 1. Create user in Supabase Auth
       const { data: authData, error: authError } = await signup(
         formData.email,
         formData.password,
@@ -100,16 +122,14 @@ export default function Signup() {
       const userId = authData?.user?.id;
       if (!userId) throw new Error('Failed to retrieve user ID');
 
-      // 2. Sync to public users table via backend
       await api.post('/auth/sync', {
         id: userId,
         full_name: formData.fullName,
         plan: formData.plan,
         charity_id: formData.charityId,
-        charity_percentage: formData.charityPercentage
+        charity_percentage: Number(formData.charityPercentage),
       });
 
-      // Show success screen
       setStep(4);
     } catch (err) {
       setError(err.message || 'An error occurred during signup');
@@ -123,14 +143,16 @@ export default function Signup() {
       <Navbar />
 
       <main className="flex-1 flex flex-col items-center justify-center p-4 sm:p-6 lg:p-8 pt-24">
-
         {step < 4 && (
           <div className="w-full max-w-lg mb-8">
             <div className="flex justify-between items-center mb-2">
               {[1, 2, 3].map((i) => (
-                <div key={i} className={`flex-1 h-2 rounded-full mx-1 transition-colors duration-300 ${
-                  i <= step ? 'bg-brand-500' : (isDark ? 'bg-dark-surface border border-dark-border' : 'bg-gray-200')
-                }`} />
+                <div
+                  key={i}
+                  className={`flex-1 h-2 rounded-full mx-1 transition-colors duration-300 ${
+                    i <= step ? 'bg-brand-500' : (isDark ? 'bg-dark-surface border border-dark-border' : 'bg-gray-200')
+                  }`}
+                />
               ))}
             </div>
             <div className={`text-center text-xs font-semibold uppercase tracking-wider ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
@@ -139,8 +161,7 @@ export default function Signup() {
           </div>
         )}
 
-        <div className={`w-full max-w-lg p-8 sm:p-10 rounded-3xl glass-card relative overflow-hidden`}>
-          
+        <div className="w-full max-w-lg p-8 sm:p-10 rounded-3xl glass-card relative overflow-hidden">
           <AnimatePresence mode="wait">
             {error && (
               <motion.div
@@ -154,7 +175,6 @@ export default function Signup() {
               </motion.div>
             )}
 
-            {/* STEP 1: Account Details */}
             {step === 1 && (
               <motion.div
                 key="step1"
@@ -182,17 +202,17 @@ export default function Signup() {
                   }`}
                 >
                   <svg className="w-5 h-5" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                    <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
-                    <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
-                    <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/>
-                    <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/>
+                    <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4" />
+                    <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853" />
+                    <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05" />
+                    <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335" />
                   </svg>
                   Continue with Google
                 </button>
 
                 <div className="relative my-6">
                   <div className="absolute inset-0 flex items-center">
-                    <div className={`w-full border-t ${isDark ? 'border-dark-border' : 'border-gray-200'}`}></div>
+                    <div className={`w-full border-t ${isDark ? 'border-dark-border' : 'border-gray-200'}`} />
                   </div>
                   <div className="relative flex justify-center text-sm">
                     <span className={`px-4 ${isDark ? 'bg-dark-card text-gray-500' : 'bg-white text-gray-500'}`}>
@@ -201,7 +221,7 @@ export default function Signup() {
                   </div>
                 </div>
 
-                <form className="space-y-5" onSubmit={(e) => e.preventDefault()}>
+                <form className="space-y-5" onSubmit={(event) => event.preventDefault()}>
                   <div>
                     <label className={`block text-sm font-medium mb-1.5 ${isDark ? 'text-gray-300' : 'text-light-text'}`}>
                       Full Name
@@ -214,7 +234,7 @@ export default function Signup() {
                         type="text"
                         {...register('fullName', { required: 'Name is required' })}
                         value={formData.fullName}
-                        onChange={(e) => setFormData(p => ({ ...p, fullName: e.target.value }))}
+                        onChange={(event) => setFormData((current) => ({ ...current, fullName: event.target.value }))}
                         className={baseInputStyles}
                         placeholder="John Doe"
                       />
@@ -232,12 +252,12 @@ export default function Signup() {
                       </div>
                       <input
                         type="email"
-                        {...register('email', { 
+                        {...register('email', {
                           required: 'Email is required',
-                          pattern: { value: /^\S+@\S+\.\S+$/, message: 'Invalid email' }
+                          pattern: { value: /^\S+@\S+\.\S+$/, message: 'Invalid email' },
                         })}
                         value={formData.email}
-                        onChange={(e) => setFormData(p => ({ ...p, email: e.target.value }))}
+                        onChange={(event) => setFormData((current) => ({ ...current, email: event.target.value }))}
                         className={baseInputStyles}
                         placeholder="you@example.com"
                       />
@@ -255,14 +275,14 @@ export default function Signup() {
                       </div>
                       <input
                         type="password"
-                        {...register('password', { 
+                        {...register('password', {
                           required: 'Password is required',
-                          minLength: { value: 8, message: 'Password must be at least 8 characters' }
+                          minLength: { value: 8, message: 'Password must be at least 8 characters' },
                         })}
                         value={formData.password}
-                        onChange={(e) => setFormData(p => ({ ...p, password: e.target.value }))}
+                        onChange={(event) => setFormData((current) => ({ ...current, password: event.target.value }))}
                         className={baseInputStyles}
-                        placeholder="••••••••"
+                        placeholder="Password"
                       />
                     </div>
                     {errors.password && <p className="mt-1 text-xs text-red-500">{errors.password.message}</p>}
@@ -286,7 +306,6 @@ export default function Signup() {
               </motion.div>
             )}
 
-            {/* STEP 2: Choose Plan */}
             {step === 2 && (
               <motion.div
                 key="step2"
@@ -305,56 +324,51 @@ export default function Signup() {
                 </div>
 
                 <div className="space-y-4 mb-8">
-                  {/* Monthly Plan */}
-                  <div
-                    onClick={() => setFormData(p => ({ ...p, plan: 'monthly' }))}
-                    className={`relative p-5 rounded-2xl border-2 cursor-pointer transition-all duration-200 ${
-                      formData.plan === 'monthly'
-                        ? 'border-brand-500 ' + (isDark ? 'bg-brand-500/10' : 'bg-brand-50')
-                        : isDark ? 'border-dark-border bg-dark-surface hover:border-gray-600' : 'border-gray-200 bg-white hover:border-gray-300'
-                    }`}
-                  >
-                    <div className="flex justify-between items-start mb-2">
-                      <h3 className={`font-bold text-lg ${isDark ? 'text-white' : 'text-light-text'}`}>Monthly Play</h3>
-                      <div className="text-right">
-                        <span className={`font-bold text-lg ${isDark ? 'text-white' : 'text-light-text'}`}>₹1,500</span>
-                        <span className={`text-xs ml-1 ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>/mo</span>
+                  {[
+                    {
+                      id: 'monthly',
+                      title: 'Monthly Play',
+                      price: 'Rs 1,500',
+                      cadence: '/mo',
+                      items: ['Enter up to 5 rolling scores', 'Participate in monthly draws', 'Donate to your chosen charity', 'Cancel anytime'],
+                    },
+                    {
+                      id: 'yearly',
+                      title: 'Yearly Play',
+                      price: 'Rs 15,000',
+                      cadence: '/yr',
+                      items: ['Everything in Monthly', '2 months free', 'Premium leaderboard badge', 'Exclusive event invites'],
+                      badge: 'Save Rs 3,000',
+                    },
+                  ].map((plan) => (
+                    <div
+                      key={plan.id}
+                      onClick={() => setFormData((current) => ({ ...current, plan: plan.id }))}
+                      className={`relative p-5 rounded-2xl border-2 cursor-pointer transition-all duration-200 ${
+                        formData.plan === plan.id
+                          ? `border-brand-500 ${isDark ? 'bg-brand-500/10' : 'bg-brand-50'}`
+                          : isDark ? 'border-dark-border bg-dark-surface hover:border-gray-600' : 'border-gray-200 bg-white hover:border-gray-300'
+                      }`}
+                    >
+                      {plan.badge && (
+                        <div className="absolute -top-3 right-4 bg-brand-500 text-white text-xs font-bold px-2 py-0.5 rounded-full">
+                          {plan.badge}
+                        </div>
+                      )}
+                      <div className="flex justify-between items-start mb-2">
+                        <h3 className={`font-bold text-lg ${isDark ? 'text-white' : 'text-light-text'}`}>{plan.title}</h3>
+                        <div className="text-right">
+                          <span className={`font-bold text-lg ${isDark ? 'text-white' : 'text-light-text'}`}>{plan.price}</span>
+                          <span className={`text-xs ml-1 ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>{plan.cadence}</span>
+                        </div>
                       </div>
+                      <ul className={`text-sm space-y-1 ${isDark ? 'text-gray-300' : 'text-gray-600'}`}>
+                        {plan.items.map((item) => (
+                          <li key={item}>- {item}</li>
+                        ))}
+                      </ul>
                     </div>
-                    <ul className={`text-sm space-y-1 ${isDark ? 'text-gray-300' : 'text-gray-600'}`}>
-                      <li>✓ Enter up to 5 scores rolling</li>
-                      <li>✓ Participate in 4 weekly draws</li>
-                      <li>✓ Donate to your chosen charity</li>
-                      <li>✓ Cancel anytime</li>
-                    </ul>
-                  </div>
-
-                  {/* Yearly Plan */}
-                  <div
-                    onClick={() => setFormData(p => ({ ...p, plan: 'yearly' }))}
-                    className={`relative p-5 rounded-2xl border-2 cursor-pointer transition-all duration-200 ${
-                      formData.plan === 'yearly'
-                        ? 'border-brand-500 ' + (isDark ? 'bg-brand-500/10' : 'bg-brand-50')
-                        : isDark ? 'border-dark-border bg-dark-surface hover:border-gray-600' : 'border-gray-200 bg-white hover:border-gray-300'
-                    }`}
-                  >
-                    <div className="absolute -top-3 right-4 bg-brand-500 text-white text-xs font-bold px-2 py-0.5 rounded-full">
-                      Save ₹3,000
-                    </div>
-                    <div className="flex justify-between items-start mb-2">
-                      <h3 className={`font-bold text-lg ${isDark ? 'text-white' : 'text-light-text'}`}>Yearly Play</h3>
-                      <div className="text-right">
-                        <span className={`font-bold text-lg ${isDark ? 'text-white' : 'text-light-text'}`}>₹15,000</span>
-                        <span className={`text-xs ml-1 ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>/yr</span>
-                      </div>
-                    </div>
-                    <ul className={`text-sm space-y-1 ${isDark ? 'text-gray-300' : 'text-gray-600'}`}>
-                      <li>✓ Everything in Monthly</li>
-                      <li>✓ 2 months free</li>
-                      <li>✓ Premium leaderboard badge</li>
-                      <li>✓ Exclusive event invites</li>
-                    </ul>
-                  </div>
+                  ))}
                 </div>
 
                 <div className="flex gap-4">
@@ -369,10 +383,7 @@ export default function Signup() {
                   </button>
                   <button
                     type="button"
-                    onClick={() => {
-                      setStep(3);
-                      setError(null);
-                    }}
+                    onClick={goToCharityStep}
                     className="flex-[2] btn-primary flex justify-center py-3.5 items-center gap-2"
                   >
                     Choose Charity <ArrowRight size={18} />
@@ -381,7 +392,6 @@ export default function Signup() {
               </motion.div>
             )}
 
-            {/* STEP 3: Choose Charity */}
             {step === 3 && (
               <motion.div
                 key="step3"
@@ -400,23 +410,44 @@ export default function Signup() {
                 </div>
 
                 <div className="space-y-3 mb-6">
-                  {DUMMY_CHARITIES.map((charity) => (
+                  {charitiesLoading && (
+                    <div className={`rounded-xl border px-4 py-5 text-sm ${isDark ? 'border-dark-border bg-dark-surface text-gray-400' : 'border-light-border bg-gray-50 text-gray-500'}`}>
+                      Loading charities...
+                    </div>
+                  )}
+
+                  {!charitiesLoading && charities.map((charity) => (
                     <div
                       key={charity.id}
-                      onClick={() => setFormData(p => ({ ...p, charityId: charity.id }))}
+                      onClick={() => setFormData((current) => ({ ...current, charityId: charity.id }))}
                       className={`flex items-center gap-4 p-4 rounded-xl border-2 cursor-pointer transition-all duration-200 ${
                         formData.charityId === charity.id
-                          ? 'border-brand-500 ' + (isDark ? 'bg-brand-500/10' : 'bg-brand-50')
+                          ? `border-brand-500 ${isDark ? 'bg-brand-500/10' : 'bg-brand-50'}`
                           : isDark ? 'border-dark-border bg-dark-surface hover:border-gray-600' : 'border-gray-200 bg-white hover:border-gray-300'
                       }`}
                     >
-                      <div className="text-2xl">{charity.icon}</div>
+                      <div className={`w-12 h-12 rounded-xl overflow-hidden flex items-center justify-center border ${isDark ? 'border-dark-border bg-dark-bg' : 'border-light-border bg-gray-50'}`}>
+                        {charity.logo_url ? (
+                          <img src={charity.logo_url} alt={charity.name} className="w-8 h-8 object-contain" />
+                        ) : (
+                          <Heart size={20} className="text-brand-500" />
+                        )}
+                      </div>
                       <div>
                         <h4 className={`font-bold text-sm ${isDark ? 'text-white' : 'text-light-text'}`}>{charity.name}</h4>
                         <p className={`text-xs mt-0.5 ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>{charity.description}</p>
+                        {Array.isArray(charity.upcoming_events) && charity.upcoming_events[0] && (
+                          <p className="mt-1 text-[11px] font-semibold text-brand-500">{charity.upcoming_events[0]}</p>
+                        )}
                       </div>
                     </div>
                   ))}
+
+                  {!charitiesLoading && charities.length === 0 && (
+                    <div className={`rounded-xl border px-4 py-5 text-sm ${isDark ? 'border-dark-border bg-dark-surface text-gray-400' : 'border-light-border bg-gray-50 text-gray-500'}`}>
+                      No charities are available yet. Ask an admin to add one before signing up.
+                    </div>
+                  )}
                 </div>
 
                 <div className="mb-8">
@@ -427,7 +458,7 @@ export default function Signup() {
                     <span className="font-bold text-brand-500">{formData.charityPercentage}%</span>
                   </div>
                   <p className={`text-xs mb-3 ${isDark ? 'text-gray-400' : 'text-light-subtext'}`}>
-                    Minimum 10% of your subscription goes to charity. You can increase this if you wish!
+                    Minimum 10% of your subscription goes to charity. You can increase this if you wish.
                   </p>
                   <input
                     type="range"
@@ -435,7 +466,7 @@ export default function Signup() {
                     max="100"
                     step="5"
                     value={formData.charityPercentage}
-                    onChange={(e) => setFormData(p => ({ ...p, charityPercentage: e.target.value }))}
+                    onChange={(event) => setFormData((current) => ({ ...current, charityPercentage: event.target.value }))}
                     className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-brand-500 dark:bg-dark-border"
                   />
                   <div className={`flex justify-between text-xs mt-1 ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>
@@ -459,8 +490,10 @@ export default function Signup() {
                   <button
                     type="button"
                     onClick={handleFinalSubmit}
-                    disabled={isLoading}
-                    className={`flex-[2] btn-primary flex justify-center py-3.5 items-center gap-2 ${isLoading ? 'opacity-80 cursor-wait' : ''}`}
+                    disabled={isLoading || charitiesLoading || !charities.length}
+                    className={`flex-[2] btn-primary flex justify-center py-3.5 items-center gap-2 ${
+                      isLoading || charitiesLoading || !charities.length ? 'opacity-80 cursor-wait' : ''
+                    }`}
                   >
                     {isLoading ? (
                       <div className="w-5 h-5 border-2 border-white/20 border-t-white rounded-full animate-spin" />
@@ -472,7 +505,6 @@ export default function Signup() {
               </motion.div>
             )}
 
-            {/* STEP 4: Success Screen */}
             {step === 4 && (
               <motion.div
                 key="step4"
@@ -488,7 +520,7 @@ export default function Signup() {
                   Check Your <span className="gradient-text">Email</span>
                 </h1>
                 <p className={`text-sm leading-relaxed mb-8 max-w-sm mx-auto ${isDark ? 'text-gray-400' : 'text-light-subtext'}`}>
-                  We've sent a verification link to <strong className={isDark ? 'text-white' : 'text-black'}>{formData.email}</strong>. 
+                  We've sent a verification link to <strong className={isDark ? 'text-white' : 'text-black'}>{formData.email}</strong>.
                   Please click the link to verify your account before logging in to complete your subscription.
                 </p>
                 <Link

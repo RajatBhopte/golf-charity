@@ -22,21 +22,17 @@
   }
 
   /* Dark mode (default) */
-  .dark body,
-  .dark {
+  html.dark,
+  html.dark body {
     background-color: #0a0f1a;
     color: #e2e8f0;
   }
 
   /* Light mode */
-  body {
+  html:not(.dark),
+  html:not(.dark) body {
     background-color: #f8fafc;
     color: #0f172a;
-  }
-
-  .dark body {
-    background-color: #0a0f1a;
-    color: #e2e8f0;
   }
 }
 
@@ -53,8 +49,8 @@
     @apply border-brand-500/30 text-brand-400 hover:bg-brand-500/10;
   }
 
-  .light .btn-secondary,
-  :not(.dark) .btn-secondary {
+  html.light .btn-secondary,
+  html:not(.dark) .btn-secondary {
     @apply border-brand-600 text-brand-600 hover:bg-brand-50;
   }
 
@@ -62,11 +58,11 @@
     @apply rounded-2xl border backdrop-blur-sm transition-all duration-300;
   }
 
-  .dark .glass-card {
+  html.dark .glass-card {
     @apply bg-dark-card/80 border-dark-border hover:border-brand-500/30;
   }
 
-  :not(.dark) .glass-card {
+  html:not(.dark) .glass-card {
     @apply bg-white border-light-border hover:border-brand-500/30 shadow-sm hover:shadow-md;
   }
 
@@ -82,11 +78,11 @@
     @apply bg-clip-text text-transparent bg-gradient-to-r from-brand-400 to-brand-600;
   }
 
-  .dark .gradient-text {
+  html.dark .gradient-text {
     @apply from-brand-400 to-brand-600;
   }
 
-  :not(.dark) .gradient-text {
+  html:not(.dark) .gradient-text {
     @apply from-brand-600 to-brand-800;
   }
 }

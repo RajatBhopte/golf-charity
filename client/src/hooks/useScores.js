@@ -11,7 +11,7 @@ export const useScores = () => {
     setError(null);
     try {
       const response = await api.get('/scores');
-      setScores(response.data);
+      setScores(Array.isArray(response.data) ? response.data : []);
     } catch (err) {
       setError(err.response?.data?.error || 'Failed to fetch scores');
     } finally {

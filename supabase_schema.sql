@@ -3,6 +3,7 @@ CREATE TABLE IF NOT EXISTS public.users (
   id UUID REFERENCES auth.users NOT NULL PRIMARY KEY,
   full_name TEXT,
   role TEXT DEFAULT 'user',
+  subscription_plan TEXT DEFAULT 'monthly' CHECK (subscription_plan IN ('monthly', 'yearly')),
   charity_id UUID,
   charity_percentage INTEGER DEFAULT 10,
   subscription_status TEXT DEFAULT 'active',

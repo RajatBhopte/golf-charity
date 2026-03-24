@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useTheme } from '../context/ThemeContext';
 import { Pencil, Trash2, X, Check, CheckCircle2, AlertTriangle, AlertCircle } from 'lucide-react';
 
-export default function ScoreList({ scores, onEdit, onDelete, loading }) {
+export default function ScoreList({ scores = [], onEdit, onDelete, loading }) {
   const { isDark } = useTheme();
   const [editingId, setEditingId] = useState(null);
   const [editScore, setEditScore] = useState('');

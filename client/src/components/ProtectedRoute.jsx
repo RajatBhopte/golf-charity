@@ -27,7 +27,7 @@ export const AuthRoute = () => {
  * Redirects to /subscribe if no active subscription found.
  */
 export const SubRoute = () => {
-  const { session, user, loading } = useAuth();
+  const { session, loading } = useAuth();
   const location = useLocation();
 
   if (loading) return null;
@@ -42,6 +42,29 @@ export const SubRoute = () => {
   //   // (This usually means their payment failed, they canceled, or they haven't finished signup)
   //   return <Navigate to="/subscribe" state={{ from: location }} replace />;
   // }
+
+  return <Outlet />;
+};
+
+/**
+ * AdminRoute: Protects routes that require a logged-in user with the 'admin' role.
+ * Redirects to /dashboard if not an admin.
+ */
+export const AdminRoute = () => {
+  const { session, user, loading } = useAuth();
+  const location = useLocation();
+
+  if (loading) return null;
+
+  if (!session) {
+    return <Navigate to="/admin/login" state={{ from: location }} replace />;
+  }
+
+  if (user?.role !== 'admin') {
+    // If they aren't an admin, send them back to the user dashboard
+    return <Navigate to="/dashboard" replace />;
+  }
+
 
   return <Outlet />;
 };

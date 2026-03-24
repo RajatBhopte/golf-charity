@@ -17,13 +17,22 @@ export default function Navbar({ variant = 'public' }) {
   ];
 
   // Links for the authenticated dashboard
+  const { user } = useAuth();
+  
   const dashboardLinks = [
     { name: 'Overview', href: '/dashboard' },
     { name: 'My Impact', href: '#' },
     { name: 'Settings', href: '#' },
   ];
 
+  if (user?.role === 'admin') {
+    dashboardLinks.push({ name: 'Admin Panel', href: '/admin' });
+  }
+
   const navLinks = variant === 'dashboard' ? dashboardLinks : publicLinks;
+  const showDashboardActions = variant === 'dashboard' && session;
+  const showPublicActions = variant === 'public';
+
 
   return (
     <nav className={`fixed top-0 left-0 right-0 z-50 backdrop-blur-lg border-b transition-colors duration-300 ${
@@ -89,7 +98,7 @@ export default function Navbar({ variant = 'public' }) {
               {isDark ? <Sun size={18} /> : <Moon size={18} />}
             </button>
 
-            {session ? (
+            {showDashboardActions ? (
               <>
                 <Link
                   to="/dashboard"
@@ -111,7 +120,7 @@ export default function Navbar({ variant = 'public' }) {
                   Log Out
                 </button>
               </>
-            ) : (
+            ) : showPublicActions ? (
               <>
                 <Link
                   to="/login"
@@ -130,7 +139,7 @@ export default function Navbar({ variant = 'public' }) {
                   Get Started
                 </Link>
               </>
-            )}
+            ) : null}
           </div>
 
           {/* Mobile Menu Button */}
@@ -195,7 +204,7 @@ export default function Navbar({ variant = 'public' }) {
               )
             ))}
             <div className={`mt-2 pt-3 border-t flex flex-col gap-2 ${isDark ? 'border-dark-border' : 'border-light-border'}`}>
-              {session ? (
+              {showDashboardActions ? (
                 <>
                   <Link
                     to="/dashboard"
@@ -219,7 +228,7 @@ export default function Navbar({ variant = 'public' }) {
                     Log Out
                   </button>
                 </>
-              ) : (
+              ) : showPublicActions ? (
                 <>
                   <Link
                     to="/login"
@@ -240,8 +249,8 @@ export default function Navbar({ variant = 'public' }) {
                     Start Playing & Giving
                   </Link>
                 </>
-              )}
-            </div>
+              ) : null}
+          </div>
           </div>
         </div>
       </div>

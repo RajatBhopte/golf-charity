@@ -3,6 +3,11 @@ const router = express.Router();
 const { requireAuth } = require('../middleware/authMiddleware');
 const supabase = require('../utils/supabase');
 
+const isMissingSubscriptionPlanColumn = (error) => {
+  const message = String(error?.message || '').toLowerCase();
+  return message.includes('subscription_plan') && message.includes('does not exist');
+};
+
 /**
  * @route POST /api/auth/sync
  * @desc Syncs user data to the public.users table after signup.
@@ -24,17 +29,32 @@ router.post('/sync', async (req, res) => {
     }
 
     // Insert or update the public user profile
-    const { error } = await supabase
+    const payload = {
+      id: user.id,
+      full_name,
+      role: 'user',
+      email: user.email || null,
+      subscription_plan: plan || 'monthly',
+      charity_id: charity_id || null,
+      charity_percentage: parseInt(charity_percentage, 10) || 10,
+      subscription_status: 'active',
+      created_at: new Date().toISOString(),
+    };
+
+    let { error } = await supabase
       .from('users')
-      .upsert({
-        id: user.id,
-        full_name,
-        role: 'user',
-        charity_id: charity_id || null,
-        charity_percentage: parseInt(charity_percentage, 10) || 10,
-        subscription_status: 'active', // Temporarily defaulting to active until Stripe is implemented
-        created_at: new Date().toISOString()
-      }, { onConflict: 'id' });
+      .upsert(payload, { onConflict: 'id' });
+
+    if (error && isMissingSubscriptionPlanColumn(error)) {
+      const fallbackPayload = { ...payload };
+      delete fallbackPayload.subscription_plan;
+
+      const fallbackResult = await supabase
+        .from('users')
+        .upsert(fallbackPayload, { onConflict: 'id' });
+
+      error = fallbackResult.error;
+    }
 
     if (error) {
       console.error('Error syncing user:', error);

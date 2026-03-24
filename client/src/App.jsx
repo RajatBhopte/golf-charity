@@ -1,7 +1,7 @@
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import { ThemeProvider } from './context/ThemeContext';
 import { AuthProvider } from './context/AuthContext';
-import { AuthRoute, SubRoute } from './components/ProtectedRoute';
+import { AuthRoute, SubRoute, AdminRoute } from './components/ProtectedRoute';
 
 // Pages
 import Home from './pages/Home';
@@ -10,6 +10,10 @@ import Signup from './pages/Signup';
 import ResetPassword from './pages/ResetPassword';
 import Dashboard from './pages/Dashboard';
 import Subscribe from './pages/Subscribe';
+import AdminDashboard from './pages/AdminDashboard';
+import AdminLogin from './pages/AdminLogin';
+
+
 
 function App() {
   return (
@@ -22,6 +26,8 @@ function App() {
             <Route path="/login" element={<Login />} />
             <Route path="/signup" element={<Signup />} />
             <Route path="/reset-password" element={<ResetPassword />} />
+            <Route path="/admin/login" element={<AdminLogin />} />
+
             
             {/* Protected Routes (Login Required) */}
             <Route element={<AuthRoute />}>
@@ -34,6 +40,12 @@ function App() {
               <Route path="/dashboard" element={<Dashboard />} />
               {/* Add other sub-only routes here (like score entry) */}
             </Route>
+
+            {/* Admin Routes (Login + Admin Role Required) */}
+            <Route element={<AdminRoute />}>
+              <Route path="/admin" element={<AdminDashboard />} />
+            </Route>
+
           </Routes>
         </Router>
       </AuthProvider>

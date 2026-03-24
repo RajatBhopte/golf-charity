@@ -4,7 +4,7 @@ const supabase = require('./utils/supabase');
 async function checkSchema() {
   try {
     // List tables using a direct query if possible, or try to select from expected tables
-    const tables = ['users', 'profile', 'profiles'];
+    const tables = ['users', 'scores', 'charities', 'draws', 'winners'];
     for (const table of tables) {
       const { data, error } = await supabase.from(table).select('*').limit(1);
       if (error) {
