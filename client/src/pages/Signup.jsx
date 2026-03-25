@@ -2,6 +2,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Link } from "react-router-dom";
+import { useLocation } from "react-router-dom";
 import { useForm } from "react-hook-form";
 import { motion, AnimatePresence } from "framer-motion";
 import { useAuth } from "../context/AuthContext";
@@ -20,9 +21,10 @@ import {
 import Navbar from "../components/Navbar";
 
 export default function Signup() {
-  const { loginWithGoogle, login } = useAuth();
+  const { loginWithGoogle, login, session, refreshUserData } = useAuth();
   const { isDark } = useTheme();
   const navigate = useNavigate();
+  const location = useLocation();
 
   const [step, setStep] = useState(1);
   const [error, setError] = useState(null);
@@ -44,6 +46,9 @@ export default function Signup() {
     formState: { errors },
     trigger,
   } = useForm();
+
+  const isGoogleOnboarding =
+    new URLSearchParams(location.search).get("oauth") === "google";
 
   const baseInputStyles = `block w-full pl-10 pr-3 py-3 rounded-xl border text-sm transition-colors focus:ring-2 focus:ring-brand-500 focus:outline-none ${
     isDark
@@ -78,6 +83,24 @@ export default function Signup() {
     fetchCharities();
   }, []);
 
+  useEffect(() => {
+    if (!isGoogleOnboarding || !session?.user) return;
+
+    setFormData((current) => ({
+      ...current,
+      fullName:
+        current.fullName ||
+        session.user.user_metadata?.full_name ||
+        session.user.user_metadata?.name ||
+        "",
+      email: current.email || session.user.email || "",
+    }));
+
+    // For Google onboarding we take users directly to charity preferences.
+    setStep(3);
+    setError(null);
+  }, [isGoogleOnboarding, session?.user]);
+
   const handleNextStep = async () => {
     const isValid = await trigger();
     if (isValid) {
@@ -93,7 +116,7 @@ export default function Signup() {
 
   const handleGoogleSignup = async () => {
     try {
-      const { error: authError } = await loginWithGoogle("/subscribe");
+      const { error: authError } = await loginWithGoogle("/signup?oauth=google");
       if (authError) throw authError;
     } catch (err) {
       setError(err.message || "Failed to sign up with Google");
@@ -127,20 +150,36 @@ export default function Signup() {
     setError(null);
 
     try {
-      await api.post("/auth/register", {
-        email: formData.email,
-        password: formData.password,
-        full_name: formData.fullName,
-        plan: formData.plan,
-        charity_id: formData.charityId,
-        charity_percentage: Number(formData.charityPercentage),
-      });
+      if (isGoogleOnboarding && session?.user?.id) {
+        await api.post("/auth/sync", {
+          id: session.user.id,
+          full_name:
+            formData.fullName ||
+            session.user.user_metadata?.full_name ||
+            session.user.user_metadata?.name ||
+            session.user.email?.split("@")[0] ||
+            "Player",
+          plan: formData.plan,
+          charity_id: formData.charityId,
+          charity_percentage: Number(formData.charityPercentage),
+        });
+        await refreshUserData?.();
+      } else {
+        await api.post("/auth/register", {
+          email: formData.email,
+          password: formData.password,
+          full_name: formData.fullName,
+          plan: formData.plan,
+          charity_id: formData.charityId,
+          charity_percentage: Number(formData.charityPercentage),
+        });
 
-      const { error: loginError } = await login(
-        formData.email,
-        formData.password,
-      );
-      if (loginError) throw loginError;
+        const { error: loginError } = await login(
+          formData.email,
+          formData.password,
+        );
+        if (loginError) throw loginError;
+      }
 
       setStep(4);
     } catch (err) {
@@ -701,7 +740,7 @@ export default function Signup() {
                     {isLoading ? (
                       <div className="w-5 h-5 border-2 border-white/20 border-t-white rounded-full animate-spin" />
                     ) : (
-                      "Create Account"
+                      isGoogleOnboarding ? "Continue" : "Create Account"
                     )}
                   </button>
                 </div>
