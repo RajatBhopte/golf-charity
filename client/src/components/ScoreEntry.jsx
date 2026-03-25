@@ -9,7 +9,12 @@ const formatDateDisplay = (dateValue) => {
   return `${month}/${day}/${year}`;
 };
 
-export default function ScoreEntry({ onAddScore, loading }) {
+export default function ScoreEntry({
+  onAddScore,
+  loading,
+  className = "",
+  stretch = false,
+}) {
   const { isDark } = useTheme();
 
   const [score, setScore] = useState("");
@@ -66,7 +71,7 @@ export default function ScoreEntry({ onAddScore, loading }) {
         isDark
           ? "bg-dark-card border-dark-border"
           : "bg-white border-light-border shadow-md"
-      }`}
+      } ${stretch ? "h-full flex flex-col" : ""} ${className}`}
     >
       <div className="mb-6">
         <h3 className="text-xl font-bold mb-2">Log a Score</h3>
@@ -78,7 +83,10 @@ export default function ScoreEntry({ onAddScore, loading }) {
         </p>
       </div>
 
-      <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+      <form
+        onSubmit={handleSubmit}
+        className={`flex flex-col gap-4 ${stretch ? "h-full" : ""}`}
+      >
         {errorMsg && (
           <div className="p-3 bg-red-500/10 border border-red-500/20 text-red-500 rounded-lg text-sm flex items-center gap-2">
             <AlertCircle size={16} /> {errorMsg}
@@ -150,7 +158,7 @@ export default function ScoreEntry({ onAddScore, loading }) {
         <button
           type="submit"
           disabled={loading}
-          className="btn-primary w-full mt-2 disabled:opacity-70 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+          className={`btn-primary w-full disabled:opacity-70 disabled:cursor-not-allowed flex items-center justify-center gap-2 ${stretch ? "mt-auto" : "mt-2"}`}
         >
           {loading ? (
             <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />

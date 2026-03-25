@@ -13,7 +13,10 @@ const requireAuth = async (req, res, next) => {
         .json({ error: "Missing or invalid authorization header" });
     }
 
-    const token = authHeader.split(" ")[1];
+    const token = authHeader.split(" ")[1]?.trim();
+    if (!token || token === "undefined" || token === "null") {
+      return res.status(401).json({ error: "Missing bearer token" });
+    }
 
     // Verify token using Supabase Auth payload
     const {
@@ -22,7 +25,6 @@ const requireAuth = async (req, res, next) => {
     } = await supabase.auth.getUser(token);
 
     if (error || !user) {
-      console.error("Auth error:", error);
       return res.status(401).json({ error: "Unauthorized: Invalid token" });
     }
 
@@ -68,11 +70,9 @@ const requireActiveSubscription = async (req, res, next) => {
       next();
     } catch (error) {
       console.error("Active subscription middleware error:", error);
-      res
-        .status(500)
-        .json({
-          error: "Internal server error during subscription validation",
-        });
+      res.status(500).json({
+        error: "Internal server error during subscription validation",
+      });
     }
   });
 };

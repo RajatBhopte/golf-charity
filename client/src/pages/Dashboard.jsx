@@ -13,6 +13,7 @@ import {
   Loader2,
   X,
   Lock,
+  Search,
 } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import { useTheme } from "../context/ThemeContext";
@@ -33,6 +34,18 @@ const readFileAsDataUrl = (file) =>
 const formatNumberSeries = (numbers = []) =>
   Array.isArray(numbers) && numbers.length ? numbers.join(", ") : "None";
 
+const formatMatchedNumbersForWin = (win) => {
+  if (Array.isArray(win?.matched_numbers) && win.matched_numbers.length) {
+    return win.matched_numbers.join(", ");
+  }
+
+  if (Number.isFinite(Number(win?.prize_tier))) {
+    return `Matched ${win.prize_tier} numbers`;
+  }
+
+  return "None";
+};
+
 import UserSidebar from "../components/UserSidebar";
 
 export default function Dashboard() {
@@ -49,8 +62,16 @@ export default function Dashboard() {
   const [selectedCharityId, setSelectedCharityId] = useState("");
   const [selectedCharityPercentage, setSelectedCharityPercentage] =
     useState(10);
+  const [impactCharitySearch, setImpactCharitySearch] = useState("");
+  const [impactSpotlightOnly, setImpactSpotlightOnly] = useState(false);
+  const [impactMinRaised, setImpactMinRaised] = useState(0);
   const [savingImpactSettings, setSavingImpactSettings] = useState(false);
   const [impactSuccessMsg, setImpactSuccessMsg] = useState("");
+  const [subscriptionActionLoading, setSubscriptionActionLoading] =
+    useState(false);
+  const [subscriptionActionMsg, setSubscriptionActionMsg] = useState("");
+  const [isClearingNotifications, setIsClearingNotifications] = useState(false);
+  const [notificationActionMsg, setNotificationActionMsg] = useState("");
   const isActiveSubscriber = user?.subscription_status === "active";
 
   const charityPercentage = Number(user?.charity_percentage || 10);
@@ -149,6 +170,31 @@ export default function Dashboard() {
     [charities, featuredCharity, user?.charity_id],
   );
 
+  const impactFilteredCharities = useMemo(() => {
+    const searchTerm = impactCharitySearch.trim().toLowerCase();
+
+    return charities.filter((charity) => {
+      if (impactSpotlightOnly && !charity?.is_spotlight) {
+        return false;
+      }
+
+      if (
+        impactMinRaised > 0 &&
+        Number(charity?.total_raised || 0) < impactMinRaised
+      ) {
+        return false;
+      }
+
+      if (!searchTerm) {
+        return true;
+      }
+
+      const name = String(charity?.name || "").toLowerCase();
+      const description = String(charity?.description || "").toLowerCase();
+      return name.includes(searchTerm) || description.includes(searchTerm);
+    });
+  }, [charities, impactCharitySearch, impactSpotlightOnly, impactMinRaised]);
+
   const drawTickets = isActiveSubscriber && scores.length >= 5 ? 1 : 0;
   const unreadNotifications = notifications.filter((n) => !n.is_read).length;
   const latestFiveScores = scores.slice(0, 5);
@@ -222,6 +268,41 @@ export default function Dashboard() {
     }
   };
 
+  const cancelSubscription = async () => {
+    if (!session?.access_token) return;
+
+    if (!window.confirm("Cancel your subscription now?")) {
+      return;
+    }
+
+    try {
+      setSubscriptionActionLoading(true);
+      setDashboardError("");
+      setSubscriptionActionMsg("");
+
+      const response = await fetch(buildApiUrl("/payments/cancel"), {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${session.access_token}`,
+        },
+      });
+
+      const payload = await response.json();
+      if (!response.ok) {
+        throw new Error(payload.error || "Failed to cancel subscription");
+      }
+
+      setSubscriptionActionMsg(
+        "Subscription cancelled. You can reactivate anytime.",
+      );
+      await refreshUserData();
+    } catch (error) {
+      setDashboardError(error.message || "Failed to cancel subscription");
+    } finally {
+      setSubscriptionActionLoading(false);
+    }
+  };
+
   const markNotificationRead = async (notificationId) => {
     if (!session?.access_token) return;
     try {
@@ -239,6 +320,47 @@ export default function Dashboard() {
       );
     } catch (e) {
       setDashboardError(e.message);
+    }
+  };
+
+  const clearAllNotifications = async () => {
+    if (!session?.access_token || isClearingNotifications) return;
+
+    if (!notifications.length) {
+      setNotificationActionMsg("No notifications to clear.");
+      return;
+    }
+
+    if (!window.confirm("Clear all notifications? This cannot be undone.")) {
+      return;
+    }
+
+    try {
+      setIsClearingNotifications(true);
+      setDashboardError("");
+      setNotificationActionMsg("");
+
+      const response = await fetch(
+        buildApiUrl("/draws/notifications/clear-all"),
+        {
+          method: "DELETE",
+          headers: { Authorization: `Bearer ${session.access_token}` },
+        },
+      );
+
+      const payload = await response.json();
+      if (!response.ok) {
+        throw new Error(payload.error || "Failed to clear notifications");
+      }
+
+      setNotifications([]);
+      setNotificationActionMsg(
+        `Cleared ${payload.deleted_count || 0} notifications.`,
+      );
+    } catch (error) {
+      setDashboardError(error.message || "Failed to clear notifications");
+    } finally {
+      setIsClearingNotifications(false);
     }
   };
 
@@ -281,12 +403,12 @@ export default function Dashboard() {
       />
 
       <main className="flex-grow lg:ml-72 min-h-screen">
-        <div className="container-max px-4 sm:px-6 lg:px-8 py-8 lg:py-12 mt-16 lg:mt-0">
-          <header className="mb-10 flex flex-col md:flex-row md:items-end justify-between gap-4">
+        <div className="container-max px-4 sm:px-6 lg:px-8 py-6 lg:py-8 mt-16 lg:mt-0">
+          <header className="mb-7 flex flex-col md:flex-row md:items-end justify-between gap-3">
             <div>
-              <div className="flex items-center gap-3 mb-2">
-                <div className="w-2.5 h-10 bg-brand-500 rounded-full" />
-                <h1 className="text-3xl lg:text-4xl font-black tracking-tight uppercase">
+              <div className="flex items-center gap-2.5 mb-1.5">
+                <div className="w-2 h-8 bg-brand-500 rounded-full" />
+                <h1 className="text-2xl lg:text-3xl font-black tracking-tight uppercase">
                   My{" "}
                   <span className="gradient-text">
                     {activeTab === "overview" ? "Terminal" : activeTab}
@@ -294,10 +416,10 @@ export default function Dashboard() {
                 </h1>
               </div>
               <p
-                className={`text-sm lg:text-base ${isDark ? "text-gray-400" : "text-light-subtext"}`}
+                className={`text-xs sm:text-sm ${isDark ? "text-gray-400" : "text-light-subtext"}`}
               >
                 {activeTab === "overview" &&
-                  "Welcome to your personalized golf charity portal."}
+                  "Welcome to your personalized SwingSave portal."}
                 {activeTab === "scores" &&
                   "Log and manage your 18-hole score performance."}
                 {activeTab === "impact" &&
@@ -310,7 +432,7 @@ export default function Dashboard() {
             </div>
 
             <div
-              className={`flex items-center gap-3 px-4 py-2.5 rounded-2xl border ${
+              className={`flex items-center gap-2.5 px-3 py-2 rounded-xl border ${
                 isDark
                   ? "bg-dark-card border-dark-border"
                   : "bg-white border-light-border"
@@ -319,7 +441,7 @@ export default function Dashboard() {
               <div
                 className={`w-3 h-3 rounded-full ${user?.subscription_status === "active" ? "bg-green-500 animate-pulse" : "bg-yellow-500"}`}
               />
-              <span className="text-[10px] font-black uppercase tracking-widest">
+              <span className="text-[9px] font-black uppercase tracking-widest">
                 {user?.subscription_status === "active"
                   ? "Active Supporter"
                   : "Pending Reactivation"}
@@ -349,8 +471,14 @@ export default function Dashboard() {
                 onClick={() => window.location.assign("/subscribe")}
                 className="mt-4 btn-primary !py-2.5 !px-5 text-xs uppercase tracking-[0.14em]"
               >
-                Activate Subscription
+                Reactivate Subscription
               </button>
+            </div>
+          )}
+
+          {subscriptionActionMsg && (
+            <div className="mb-8 rounded-2xl border border-emerald-500/20 bg-emerald-500/10 px-6 py-4 text-sm text-emerald-500">
+              {subscriptionActionMsg}
             </div>
           )}
 
@@ -367,10 +495,10 @@ export default function Dashboard() {
           )}
 
           {/* Tab Content Areas */}
-          <div className="animate-fade-in space-y-10">
+          <div className="animate-fade-in space-y-7">
             {activeTab === "overview" && (
-              <div className="space-y-10">
-                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6">
+              <div className="space-y-7">
+                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
                   <MetricCard
                     isDark={isDark}
                     title={
@@ -435,17 +563,18 @@ export default function Dashboard() {
                   />
                 </div>
 
-                <div className="grid grid-cols-1 xl:grid-cols-5 gap-8">
-                  <div className="xl:col-span-3 space-y-4">
+                <div className="grid grid-cols-1 xl:grid-cols-5 gap-6 items-stretch">
+                  <div className="xl:col-span-3 h-full flex flex-col gap-4">
                     <LatestFiveScoreBoard
                       isDark={isDark}
                       scores={latestFiveScores}
                       loading={scoresLoading}
+                      className="flex-1"
                     />
                     {isActiveSubscriber ? (
                       <button
                         onClick={() => setActiveTab("scores")}
-                        className="w-full py-4 rounded-2xl border border-dashed border-gray-300 dark:border-dark-border text-sm font-bold uppercase tracking-widest hover:bg-brand-500/5 hover:text-brand-500 transition-all"
+                        className="w-full py-3 rounded-xl border border-dashed border-gray-300 dark:border-dark-border text-xs font-bold uppercase tracking-widest hover:bg-brand-500/5 hover:text-brand-500 transition-all"
                       >
                         View and manage score history ({scores.length})
                       </button>
@@ -453,17 +582,194 @@ export default function Dashboard() {
                       <AccessLockedPanel isDark={isDark} compact />
                     )}
                   </div>
-                  <div className="xl:col-span-2">
+                  <div className="xl:col-span-2 h-full">
                     {isActiveSubscriber ? (
                       <ScoreEntry
                         onAddScore={addScore}
                         loading={scoresLoading}
+                        stretch
+                        className="h-full"
                       />
                     ) : (
                       <AccessLockedPanel isDark={isDark} />
                     )}
                   </div>
                 </div>
+
+                {isActiveSubscriber && (
+                  <section className="space-y-4">
+                    <div className="flex items-center justify-between gap-3">
+                      <h3 className="text-lg sm:text-xl font-black tracking-tight">
+                        Winning History
+                      </h3>
+                      <button
+                        onClick={() => setActiveTab("notifications")}
+                        className="text-[10px] font-bold uppercase tracking-wider text-brand-500 hover:text-brand-400"
+                      >
+                        View Alerts
+                      </button>
+                    </div>
+
+                    {metaLoading ? (
+                      <div className="flex justify-center py-16">
+                        <Loader2
+                          className="animate-spin text-brand-500"
+                          size={32}
+                        />
+                      </div>
+                    ) : wins.length === 0 ? (
+                      <div className="text-center py-12 bg-dark-card/20 rounded-2xl border border-dashed border-dark-border">
+                        <Trophy
+                          className="mx-auto text-gray-700 mb-3"
+                          size={32}
+                        />
+                        <h4 className="text-base font-bold mb-1">
+                          No wins recorded yet
+                        </h4>
+                        <p className="text-sm text-gray-500">
+                          Log scores to enter future draws. Your winning tickets
+                          will appear here.
+                        </p>
+                      </div>
+                    ) : (
+                      <div className="space-y-4">
+                        {wins.map((win) => (
+                          <div
+                            key={win.id}
+                            className={`p-5 rounded-2xl border ${isDark ? "bg-dark-card border-dark-border" : "bg-white border-light-border shadow-sm"}`}
+                          >
+                            <div className="flex flex-col xl:flex-row justify-between gap-5">
+                              <div className="space-y-3">
+                                <div className="flex items-center gap-2.5">
+                                  <div className="px-3 py-1 rounded-full bg-brand-500 text-white text-[10px] font-black uppercase tracking-widest">
+                                    {win.draws?.month_year
+                                      ? new Date(
+                                          win.draws.month_year,
+                                        ).toLocaleDateString([], {
+                                          month: "long",
+                                          year: "numeric",
+                                        })
+                                      : "Win"}
+                                  </div>
+                                  <StatusPill
+                                    label={win.verification_status}
+                                    tone={
+                                      win.verification_status === "approved"
+                                        ? "green"
+                                        : win.verification_status === "rejected"
+                                          ? "red"
+                                          : "amber"
+                                    }
+                                  />
+                                  <StatusPill
+                                    label={win.payment_status}
+                                    tone={
+                                      win.payment_status === "paid"
+                                        ? "blue"
+                                        : "slate"
+                                    }
+                                  />
+                                </div>
+                                <h3 className="text-2xl font-black">
+                                  {formatCurrencyINR(win.amount || 0)}
+                                </h3>
+                                <p className="text-gray-500 text-xs sm:text-sm italic">
+                                  {win.prize_tier}-number match
+                                </p>
+
+                                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 xl:pt-2">
+                                  <WinBadge
+                                    label="Winning Numbers"
+                                    value={formatNumberSeries(
+                                      win.draws?.winning_numbers,
+                                    )}
+                                  />
+                                  <WinBadge
+                                    label="Your Match"
+                                    value={formatMatchedNumbersForWin(win)}
+                                    color="text-brand-500"
+                                  />
+                                  <WinBadge
+                                    label="Ticket Hash"
+                                    value={win.id?.slice(0, 8)}
+                                  />
+                                </div>
+                              </div>
+
+                              <div className="xl:w-72 space-y-3 pt-2 xl:pt-0">
+                                {win.payment_status === "paid" ? (
+                                  <div
+                                    className={`rounded-xl border px-4 py-3 text-center text-xs font-black uppercase tracking-widest ${
+                                      isDark
+                                        ? "border-blue-500/30 bg-blue-500/10 text-blue-400"
+                                        : "border-blue-200 bg-blue-50 text-blue-600"
+                                    }`}
+                                  >
+                                    Payment Completed
+                                  </div>
+                                ) : (
+                                  <>
+                                    <p className="text-xs font-bold uppercase tracking-widest text-gray-500">
+                                      Verification Action
+                                    </p>
+                                    {win.rejection_reason && (
+                                      <p className="text-sm font-bold text-red-500">
+                                        {win.rejection_reason}
+                                      </p>
+                                    )}
+
+                                    <label
+                                      className={`w-full flex items-center justify-center gap-2 px-4 py-3 rounded-xl text-xs sm:text-sm font-black uppercase tracking-widest cursor-pointer transition-all ${
+                                        isDark
+                                          ? "bg-brand-500 hover:bg-brand-600 text-white shadow-lg shadow-brand-500/20"
+                                          : "bg-black text-white hover:bg-gray-800"
+                                      }`}
+                                    >
+                                      {uploadingWinnerId === win.id ? (
+                                        <Loader2
+                                          className="animate-spin"
+                                          size={18}
+                                        />
+                                      ) : win.screenshot_url ? (
+                                        <CheckCircle2 size={18} />
+                                      ) : (
+                                        <Upload size={18} />
+                                      )}
+                                      {win.screenshot_url
+                                        ? "Update Proof"
+                                        : "Upload Proof"}
+                                      <input
+                                        type="file"
+                                        accept="image/*"
+                                        className="hidden"
+                                        disabled={uploadingWinnerId === win.id}
+                                        onChange={(e) =>
+                                          e.target.files?.[0] &&
+                                          submitProof(win.id, e.target.files[0])
+                                        }
+                                      />
+                                    </label>
+
+                                    {win.proof_signed_url && (
+                                      <a
+                                        href={win.proof_signed_url}
+                                        target="_blank"
+                                        rel="noreferrer"
+                                        className="block text-center text-xs font-bold text-gray-500 hover:text-brand-500 underline decoration-dotted underline-offset-4"
+                                      >
+                                        View Current Proof
+                                      </a>
+                                    )}
+                                  </>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </section>
+                )}
               </div>
             )}
 
@@ -565,6 +871,69 @@ export default function Dashboard() {
                           My Charity Settings
                         </h4>
 
+                        <div className="mb-3 rounded-xl border p-3 bg-black/[0.02] dark:bg-white/[0.02] border-black/10 dark:border-white/10 space-y-3">
+                          <div className="relative">
+                            <Search
+                              size={14}
+                              className={`absolute left-3 top-1/2 -translate-y-1/2 ${
+                                isDark ? "text-gray-500" : "text-gray-400"
+                              }`}
+                            />
+                            <input
+                              value={impactCharitySearch}
+                              onChange={(e) =>
+                                setImpactCharitySearch(e.target.value)
+                              }
+                              placeholder="Search charities"
+                              className={`w-full rounded-xl border pl-9 pr-3 py-2.5 text-sm outline-none ${
+                                isDark
+                                  ? "bg-[#0a132b] border-dark-border text-white"
+                                  : "bg-white border-light-border text-slate-800"
+                              }`}
+                            />
+                          </div>
+
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                            <label
+                              className={`flex items-center justify-between rounded-xl border px-3 py-2 text-xs font-semibold ${
+                                isDark
+                                  ? "border-dark-border text-gray-300"
+                                  : "border-light-border text-slate-700"
+                              }`}
+                            >
+                              Spotlight only
+                              <input
+                                type="checkbox"
+                                checked={impactSpotlightOnly}
+                                onChange={(e) =>
+                                  setImpactSpotlightOnly(e.target.checked)
+                                }
+                              />
+                            </label>
+                            <input
+                              type="number"
+                              min="0"
+                              value={impactMinRaised}
+                              onChange={(e) =>
+                                setImpactMinRaised(Number(e.target.value) || 0)
+                              }
+                              placeholder="Min raised"
+                              className={`w-full rounded-xl border px-3 py-2 text-sm outline-none ${
+                                isDark
+                                  ? "bg-[#0a132b] border-dark-border text-white"
+                                  : "bg-white border-light-border text-slate-800"
+                              }`}
+                            />
+                          </div>
+
+                          <p
+                            className={`text-[11px] ${isDark ? "text-gray-500" : "text-gray-500"}`}
+                          >
+                            {impactFilteredCharities.length} charities match
+                            your filters.
+                          </p>
+                        </div>
+
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3">
                           <div>
                             <label
@@ -584,7 +953,7 @@ export default function Dashboard() {
                               }`}
                             >
                               <option value="">No charity selected</option>
-                              {charities.map((charity) => (
+                              {impactFilteredCharities.map((charity) => (
                                 <option key={charity.id} value={charity.id}>
                                   {charity.name}
                                 </option>
@@ -662,15 +1031,15 @@ export default function Dashboard() {
                       />
                     </div>
                   ) : wins.length === 0 ? (
-                    <div className="text-center py-24 bg-dark-card/20 rounded-3xl border border-dashed border-dark-border">
+                    <div className="text-center py-16 bg-dark-card/20 rounded-2xl border border-dashed border-dark-border">
                       <Trophy
                         className="mx-auto text-gray-700 mb-4"
-                        size={48}
+                        size={36}
                       />
-                      <h3 className="text-xl font-bold mb-2">
+                      <h3 className="text-lg font-bold mb-2">
                         No wins recorded yet
                       </h3>
-                      <p className="text-gray-500">
+                      <p className="text-sm text-gray-500">
                         Log scores to enter future draws. Your winning tickets
                         will appear here.
                       </p>
@@ -679,11 +1048,11 @@ export default function Dashboard() {
                     wins.map((win) => (
                       <div
                         key={win.id}
-                        className={`p-8 rounded-3xl border ${isDark ? "bg-dark-card border-dark-border" : "bg-white border-light-border shadow-sm"}`}
+                        className={`p-5 rounded-2xl border ${isDark ? "bg-dark-card border-dark-border" : "bg-white border-light-border shadow-sm"}`}
                       >
-                        <div className="flex flex-col xl:flex-row justify-between gap-8">
-                          <div className="space-y-4">
-                            <div className="flex items-center gap-3">
+                        <div className="flex flex-col xl:flex-row justify-between gap-5">
+                          <div className="space-y-3">
+                            <div className="flex items-center gap-2.5">
                               <div className="px-3 py-1 rounded-full bg-brand-500 text-white text-[10px] font-black uppercase tracking-widest">
                                 {win.draws?.month_year
                                   ? new Date(
@@ -713,21 +1082,23 @@ export default function Dashboard() {
                                 }
                               />
                             </div>
-                            <h3 className="text-3xl font-black">
+                            <h3 className="text-2xl font-black">
                               {formatCurrencyINR(win.amount || 0)}
                             </h3>
-                            <p className="text-gray-500 text-sm italic">
+                            <p className="text-gray-500 text-xs sm:text-sm italic">
                               {win.prize_tier}-number match
                             </p>
 
-                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 xl:pt-4">
+                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 xl:pt-2">
                               <WinBadge
                                 label="Winning Numbers"
-                                value={win.draws?.winning_numbers?.join(", ")}
+                                value={formatNumberSeries(
+                                  win.draws?.winning_numbers,
+                                )}
                               />
                               <WinBadge
                                 label="Your Match"
-                                value={win.matched_numbers?.join(", ")}
+                                value={formatMatchedNumbersForWin(win)}
                                 color="text-brand-500"
                               />
                               <WinBadge
@@ -737,54 +1108,71 @@ export default function Dashboard() {
                             </div>
                           </div>
 
-                          <div className="xl:w-80 space-y-4 pt-4 xl:pt-0">
-                            <p className="text-xs font-bold uppercase tracking-widest text-gray-500">
-                              Verification Action
-                            </p>
-                            {win.rejection_reason && (
-                              <p className="text-sm font-bold text-red-500">
-                                {win.rejection_reason}
-                              </p>
-                            )}
-
-                            <label
-                              className={`w-full flex items-center justify-center gap-2 px-6 py-4 rounded-2xl text-sm font-black uppercase tracking-widest cursor-pointer transition-all ${
-                                isDark
-                                  ? "bg-brand-500 hover:bg-brand-600 text-white shadow-lg shadow-brand-500/20"
-                                  : "bg-black text-white hover:bg-gray-800"
-                              }`}
-                            >
-                              {uploadingWinnerId === win.id ? (
-                                <Loader2 className="animate-spin" size={18} />
-                              ) : win.screenshot_url ? (
-                                <CheckCircle2 size={18} />
-                              ) : (
-                                <Upload size={18} />
-                              )}
-                              {win.screenshot_url
-                                ? "Update Proof"
-                                : "Upload Proof"}
-                              <input
-                                type="file"
-                                accept="image/*"
-                                className="hidden"
-                                disabled={uploadingWinnerId === win.id}
-                                onChange={(e) =>
-                                  e.target.files?.[0] &&
-                                  submitProof(win.id, e.target.files[0])
-                                }
-                              />
-                            </label>
-
-                            {win.proof_signed_url && (
-                              <a
-                                href={win.proof_signed_url}
-                                target="_blank"
-                                rel="noreferrer"
-                                className="block text-center text-xs font-bold text-gray-500 hover:text-brand-500 underline decoration-dotted underline-offset-4"
+                          <div className="xl:w-72 space-y-3 pt-2 xl:pt-0">
+                            {win.payment_status === "paid" ? (
+                              <div
+                                className={`rounded-xl border px-4 py-3 text-center text-xs font-black uppercase tracking-widest ${
+                                  isDark
+                                    ? "border-blue-500/30 bg-blue-500/10 text-blue-400"
+                                    : "border-blue-200 bg-blue-50 text-blue-600"
+                                }`}
                               >
-                                View Current Proof
-                              </a>
+                                Payment Completed
+                              </div>
+                            ) : (
+                              <>
+                                <p className="text-xs font-bold uppercase tracking-widest text-gray-500">
+                                  Verification Action
+                                </p>
+                                {win.rejection_reason && (
+                                  <p className="text-sm font-bold text-red-500">
+                                    {win.rejection_reason}
+                                  </p>
+                                )}
+
+                                <label
+                                  className={`w-full flex items-center justify-center gap-2 px-4 py-3 rounded-xl text-xs sm:text-sm font-black uppercase tracking-widest cursor-pointer transition-all ${
+                                    isDark
+                                      ? "bg-brand-500 hover:bg-brand-600 text-white shadow-lg shadow-brand-500/20"
+                                      : "bg-black text-white hover:bg-gray-800"
+                                  }`}
+                                >
+                                  {uploadingWinnerId === win.id ? (
+                                    <Loader2
+                                      className="animate-spin"
+                                      size={18}
+                                    />
+                                  ) : win.screenshot_url ? (
+                                    <CheckCircle2 size={18} />
+                                  ) : (
+                                    <Upload size={18} />
+                                  )}
+                                  {win.screenshot_url
+                                    ? "Update Proof"
+                                    : "Upload Proof"}
+                                  <input
+                                    type="file"
+                                    accept="image/*"
+                                    className="hidden"
+                                    disabled={uploadingWinnerId === win.id}
+                                    onChange={(e) =>
+                                      e.target.files?.[0] &&
+                                      submitProof(win.id, e.target.files[0])
+                                    }
+                                  />
+                                </label>
+
+                                {win.proof_signed_url && (
+                                  <a
+                                    href={win.proof_signed_url}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    className="block text-center text-xs font-bold text-gray-500 hover:text-brand-500 underline decoration-dotted underline-offset-4"
+                                  >
+                                    View Current Proof
+                                  </a>
+                                )}
+                              </>
                             )}
                           </div>
                         </div>
@@ -799,6 +1187,30 @@ export default function Dashboard() {
             {activeTab === "notifications" &&
               (isActiveSubscriber ? (
                 <div className="max-w-4xl space-y-4">
+                  <div className="flex justify-end">
+                    <button
+                      onClick={clearAllNotifications}
+                      disabled={
+                        isClearingNotifications || notifications.length === 0
+                      }
+                      className={`px-4 py-2 rounded-lg text-xs font-bold uppercase tracking-wider transition-colors ${
+                        isDark
+                          ? "bg-red-500/15 text-red-400 hover:bg-red-500/25 disabled:opacity-40"
+                          : "bg-red-50 text-red-600 hover:bg-red-100 disabled:opacity-40"
+                      }`}
+                    >
+                      {isClearingNotifications
+                        ? "Clearing..."
+                        : "Clear All Notifications"}
+                    </button>
+                  </div>
+
+                  {notificationActionMsg && (
+                    <p className="text-xs font-semibold text-green-500">
+                      {notificationActionMsg}
+                    </p>
+                  )}
+
                   {metaLoading ? (
                     <div className="flex justify-center py-20">
                       <Loader2
@@ -807,12 +1219,12 @@ export default function Dashboard() {
                       />
                     </div>
                   ) : notifications.length === 0 ? (
-                    <div className="text-center py-24 bg-dark-card/20 rounded-3xl border border-dashed border-dark-border">
+                    <div className="text-center py-16 bg-dark-card/20 rounded-2xl border border-dashed border-dark-border">
                       <Bell
                         className="mx-auto text-gray-700 mb-4 opacity-50"
-                        size={48}
+                        size={34}
                       />
-                      <p className="text-gray-500">
+                      <p className="text-sm text-gray-500">
                         Inbox is empty. We will notify you here about results.
                       </p>
                     </div>
@@ -826,7 +1238,7 @@ export default function Dashboard() {
                           !n.id.startsWith("local-") &&
                           markNotificationRead(n.id)
                         }
-                        className={`w-full text-left p-6 rounded-2xl border transition-all ${
+                        className={`w-full text-left p-4 rounded-xl border transition-all ${
                           n.is_read
                             ? isDark
                               ? "bg-dark-card/40 border-dark-border opacity-70"
@@ -836,11 +1248,11 @@ export default function Dashboard() {
                       >
                         <div className="flex items-start justify-between gap-4">
                           <div className="space-y-1">
-                            <div className="font-black uppercase tracking-tight text-lg">
+                            <div className="font-black uppercase tracking-tight text-sm sm:text-base">
                               {n.title || "System Alert"}
                             </div>
                             <p
-                              className={`text-sm ${isDark ? "text-gray-400" : "text-light-subtext"}`}
+                              className={`text-xs sm:text-sm ${isDark ? "text-gray-400" : "text-light-subtext"}`}
                             >
                               {n.message}
                             </p>
@@ -871,17 +1283,19 @@ export default function Dashboard() {
 function AccessLockedPanel({ isDark, compact = false }) {
   return (
     <div
-      className={`rounded-2xl border p-6 ${compact ? "" : "min-h-[260px]"} flex flex-col items-start justify-center gap-3 ${
+      className={`rounded-xl border p-5 ${compact ? "" : "min-h-[220px]"} flex flex-col items-start justify-center gap-2.5 ${
         isDark
           ? "bg-dark-card border-dark-border"
           : "bg-white border-light-border shadow-sm"
       }`}
     >
-      <div className="w-10 h-10 rounded-xl bg-amber-500/15 text-amber-500 flex items-center justify-center">
-        <Lock size={18} />
+      <div className="w-9 h-9 rounded-lg bg-amber-500/15 text-amber-500 flex items-center justify-center">
+        <Lock size={16} />
       </div>
-      <h3 className="text-lg font-black">Locked Until Subscription</h3>
-      <p className={`text-sm ${isDark ? "text-gray-400" : "text-gray-600"}`}>
+      <h3 className="text-base font-black">Locked Until Subscription</h3>
+      <p
+        className={`text-xs sm:text-sm ${isDark ? "text-gray-400" : "text-gray-600"}`}
+      >
         You can explore this dashboard section now. Activate your subscription
         to unlock score management, winner history, and notifications.
       </p>
@@ -898,23 +1312,23 @@ function AccessLockedPanel({ isDark, compact = false }) {
 function MetricCard({ title, icon: Icon, iconClass, value, caption, isDark }) {
   return (
     <div
-      className={`p-6 rounded-3xl border transition-all duration-300 group hover:-translate-y-1 ${isDark ? "bg-dark-card border-dark-border hover:border-brand-500/40" : "bg-white border-light-border shadow-sm hover:shadow-xl hover:shadow-brand-500/5"}`}
+      className={`p-4 rounded-2xl border transition-all duration-300 group ${isDark ? "bg-dark-card border-dark-border hover:border-brand-500/40" : "bg-white border-light-border shadow-sm hover:shadow-lg hover:shadow-brand-500/5"}`}
     >
-      <div className="flex items-center justify-between mb-4">
+      <div className="flex items-center justify-between mb-3">
         <h3
-          className={`text-sm font-medium ${isDark ? "text-gray-400" : "text-light-subtext"}`}
+          className={`text-xs sm:text-sm font-medium ${isDark ? "text-gray-400" : "text-light-subtext"}`}
         >
           {title}
         </h3>
-        <div className={`p-2.5 rounded-xl transition-colors ${iconClass}`}>
-          <Icon size={18} />
+        <div className={`p-2 rounded-lg transition-colors ${iconClass}`}>
+          <Icon size={16} />
         </div>
       </div>
-      <div className="flex items-baseline gap-2 mb-1">
-        <span className="text-3xl font-bold">{value}</span>
+      <div className="flex items-baseline gap-2 mb-0.5">
+        <span className="text-2xl font-bold">{value}</span>
       </div>
       <p
-        className={`text-sm ${isDark ? "text-gray-500" : "text-light-subtext"}`}
+        className={`text-xs sm:text-sm ${isDark ? "text-gray-500" : "text-light-subtext"}`}
       >
         {caption}
       </p>
@@ -967,52 +1381,54 @@ function WinBadge({ label, value, color }) {
       <p className="text-[9px] font-bold uppercase tracking-widest text-gray-500">
         {label}
       </p>
-      <p className={`text-sm font-bold ${color || "text-current"}`}>{value}</p>
+      <p className={`text-xs sm:text-sm font-bold ${color || "text-current"}`}>
+        {value}
+      </p>
     </div>
   );
 }
 
-function LatestFiveScoreBoard({ isDark, scores, loading }) {
+function LatestFiveScoreBoard({ isDark, scores, loading, className = "" }) {
   const slots = Array.from({ length: 5 }, (_, index) => scores[index] || null);
 
   return (
     <section
-      className={`rounded-3xl border p-6 sm:p-8 ${isDark ? "bg-[#081538] border-[#1a2f5f]" : "bg-[#eef4ff] border-[#c9d9ff]"}`}
+      className={`rounded-2xl border p-4 sm:p-5 ${isDark ? "bg-[#081538] border-[#1a2f5f]" : "bg-[#eef4ff] border-[#c9d9ff]"} ${className}`}
     >
-      <div className="flex items-center justify-between gap-3 mb-6">
+      <div className="flex items-center justify-between gap-3 mb-4">
         <h3
-          className={`flex items-center gap-3 text-3xl font-black tracking-tight ${isDark ? "text-white" : "text-[#0d1f4a]"}`}
+          className={`flex items-center gap-2 text-xl sm:text-2xl font-black tracking-tight ${isDark ? "text-white" : "text-[#0d1f4a]"}`}
         >
-          <Clock className="text-indigo-500" size={34} />
+          <Clock className="text-indigo-500" size={24} />
           Latest 5 Scores
         </h3>
         <span
-          className={`px-5 py-2 rounded-full text-xs font-black uppercase tracking-widest border ${isDark ? "bg-[#020b27] border-[#1a2f5f] text-[#7f95d7]" : "bg-white border-[#c9d9ff] text-[#3354a8]"}`}
+          className={`px-3 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest border ${isDark ? "bg-[#020b27] border-[#1a2f5f] text-[#7f95d7]" : "bg-white border-[#c9d9ff] text-[#3354a8]"}`}
         >
           Stableford
         </span>
       </div>
 
-      <div className="grid grid-cols-2 sm:grid-cols-5 gap-4 sm:gap-5">
+      <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 sm:gap-3.5">
         {slots.map((slot, index) => (
           <div
             key={slot?.id || `score-slot-${index}`}
-            className={`h-40 rounded-[28px] border-4 border-dashed flex items-center justify-center ${isDark ? "border-[#1d315f] bg-[#0a1a42]" : "border-[#b3c6f7] bg-[#e5edff]"}`}
+            className={`h-32 rounded-2xl border-2 border-dashed flex items-center justify-center ${isDark ? "border-[#1d315f] bg-[#0a1a42]" : "border-[#b3c6f7] bg-[#e5edff]"}`}
           >
             {loading ? (
               <Loader2
                 className={`animate-spin ${isDark ? "text-[#5473be]" : "text-[#4a67ae]"}`}
-                size={28}
+                size={22}
               />
             ) : slot ? (
               <div className="text-center">
                 <p
-                  className={`text-5xl font-black leading-none ${isDark ? "text-white" : "text-[#10295f]"}`}
+                  className={`text-3xl sm:text-4xl font-black leading-none ${isDark ? "text-white" : "text-[#10295f]"}`}
                 >
                   {slot.score}
                 </p>
                 <p
-                  className={`mt-2 text-[11px] font-bold uppercase tracking-wider ${isDark ? "text-[#7f95d7]" : "text-[#4a67ae]"}`}
+                  className={`mt-1.5 text-[10px] font-bold uppercase tracking-wider ${isDark ? "text-[#7f95d7]" : "text-[#4a67ae]"}`}
                 >
                   {new Date(slot.played_date).toLocaleDateString(undefined, {
                     month: "short",
@@ -1022,7 +1438,7 @@ function LatestFiveScoreBoard({ isDark, scores, loading }) {
               </div>
             ) : (
               <span
-                className={`text-5xl font-black leading-none ${isDark ? "text-[#1d315f]" : "text-[#8aa1d8]"}`}
+                className={`text-3xl sm:text-4xl font-black leading-none ${isDark ? "text-[#1d315f]" : "text-[#8aa1d8]"}`}
               >
                 --
               </span>

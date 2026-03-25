@@ -10,6 +10,20 @@ A premium, full-stack platform for managing golf tournament subscriptions, chari
 -   **Dual-Theme UI**: Seamless light and dark mode support with a premium, glassmorphic aesthetic.
 -   **Secure Authentication**: Multi-step signup flow with Supabase Auth and Google OAuth integration.
 
+
+## 📸 Project Screenshots
+
+### 🏠 Landing Page
+![Landing Page](./assets/landing.png)
+
+### 👤 User Dashboard
+![Dashboard](./assets/dashboard.png)
+
+### 🔑 Admin Panel
+![Admin Panel](./assets/admin.png)
+
+---
+
 ## 🛠 Tech Stack
 -   **Frontend**: React 19, Vite, Tailwind CSS, Framer Motion, Lucide Icons.
 -   **Backend**: Node.js, Express.

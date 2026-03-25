@@ -39,6 +39,12 @@ export function AuthProvider({ children }) {
   }, []);
 
   const fetchUserProfile = async (userId) => {
+    if (!userId) {
+      setUser(null);
+      setLoading(false);
+      return;
+    }
+
     setLoading(true);
 
     try {
@@ -46,11 +52,14 @@ export function AuthProvider({ children }) {
         .from("users")
         .select("*")
         .eq("id", userId)
-        .single();
+        .maybeSingle();
 
       if (error) {
-        console.error("Error fetching user profile:", error);
-        // Sometimes the row might not exist yet during signup, we just set the auth user initially
+        console.error("Error fetching user profile:", error.message || error);
+        // Keep auth session usable even when profile query fails.
+        setUser({ id: userId });
+      } else if (!data) {
+        // No profile row yet (common right after OAuth register/sync).
         setUser({ id: userId });
       } else {
         setUser({ id: userId, ...data });
@@ -66,15 +75,14 @@ export function AuthProvider({ children }) {
     return supabase.auth.signInWithPassword({ email, password });
   };
 
-  const loginWithGoogle = async (redirectPath = "/dashboard") => {
-    const normalizedRedirectPath = redirectPath.startsWith("/")
-      ? redirectPath
-      : "/dashboard";
-
+  const loginWithGoogle = async () => {
+    // Always land on the signup onboarding page after Google OAuth.
+    // Signup.jsx will detect whether the user is new or returning and
+    // route them to the correct place (charity step / /subscribe / /dashboard).
     return supabase.auth.signInWithOAuth({
       provider: "google",
       options: {
-        redirectTo: `${window.location.origin}${normalizedRedirectPath}`,
+        redirectTo: `${window.location.origin}/signup?oauth=google`,
       },
     });
   };

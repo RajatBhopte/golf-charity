@@ -21,6 +21,18 @@ const formatAuditAction = (action) =>
 const formatNumberSeries = (numbers = []) =>
   Array.isArray(numbers) && numbers.length ? numbers.join(", ") : "None";
 
+const formatMatchedNumbers = (winner) => {
+  if (Array.isArray(winner?.matched_numbers) && winner.matched_numbers.length) {
+    return winner.matched_numbers.join(", ");
+  }
+
+  if (Number.isFinite(Number(winner?.prize_tier))) {
+    return `Matched ${winner.prize_tier} numbers`;
+  }
+
+  return "None";
+};
+
 export default function AdminWinnerVerification({ isDark }) {
   const { session } = useAuth();
   const [winners, setWinners] = useState([]);
@@ -110,7 +122,12 @@ export default function AdminWinnerVerification({ isDark }) {
     [winners, filter, searchTerm],
   );
 
-  const rejectWinner = (winnerId) => {
+  const rejectWinner = (winner) => {
+    if (winner?.payment_status === "paid") {
+      setError("Paid winners cannot be rejected.");
+      return;
+    }
+
     const rejectionReason = window.prompt(
       "Add a rejection reason for audit visibility:",
       "Rejected by admin",
@@ -118,7 +135,7 @@ export default function AdminWinnerVerification({ isDark }) {
     if (rejectionReason === null) {
       return;
     }
-    updateStatus(winnerId, {
+    updateStatus(winner.id, {
       verification_status: "rejected",
       rejection_reason: rejectionReason,
     });
@@ -249,7 +266,7 @@ export default function AdminWinnerVerification({ isDark }) {
                       Submitted Scores: {formatNumberSeries(w.submitted_scores)}
                     </div>
                     <div className="text-xs text-brand-500">
-                      Matched Numbers: {formatNumberSeries(w.matched_numbers)}
+                      Matched Numbers: {formatMatchedNumbers(w)}
                     </div>
                     <div className="text-xs text-gray-500 mt-1">
                       {w.users?.email || "No email"} · Updated{" "}
@@ -292,7 +309,9 @@ export default function AdminWinnerVerification({ isDark }) {
                   <span
                     className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-black ${
                       w.prize_tier === 5
-                        ? "bg-amber-500/10 text-amber-500"
+                        ? isDark
+                          ? "bg-amber-500/10 text-amber-400"
+                          : "bg-amber-100 text-amber-700 border border-amber-200"
                         : w.prize_tier === 4
                           ? "bg-slate-400/20 text-slate-400"
                           : "bg-orange-700/20 text-orange-700"
@@ -306,28 +325,44 @@ export default function AdminWinnerVerification({ isDark }) {
                 </td>
                 <td className="px-6 py-4">
                   <div className="flex justify-center gap-2">
-                    <button
-                      onClick={() =>
-                        updateStatus(w.id, { verification_status: "approved" })
-                      }
-                      disabled={updatingId === w.id}
-                      className={`p-2 rounded-lg transition-all ${w.verification_status === "approved" ? "bg-green-500 text-white" : "hover:bg-green-500/10 text-green-500"}`}
-                      title="Approve Proof"
-                    >
-                      {updatingId === w.id ? (
-                        <Loader2 className="animate-spin" size={18} />
-                      ) : (
-                        <CheckCircle2 size={18} />
-                      )}
-                    </button>
-                    <button
-                      onClick={() => rejectWinner(w.id)}
-                      disabled={updatingId === w.id}
-                      className={`p-2 rounded-lg transition-all ${w.verification_status === "rejected" ? "bg-red-500 text-white" : "hover:bg-red-500/10 text-red-500"}`}
-                      title="Reject Proof"
-                    >
-                      <XCircle size={18} />
-                    </button>
+                    {(() => {
+                      const isPaid = w.payment_status === "paid";
+                      const isUpdating = updatingId === w.id;
+                      const disableVerification = isUpdating || isPaid;
+
+                      return (
+                        <>
+                          <button
+                            onClick={() =>
+                              updateStatus(w.id, {
+                                verification_status: "approved",
+                              })
+                            }
+                            disabled={disableVerification}
+                            className={`p-2 rounded-lg transition-all ${w.verification_status === "approved" ? "bg-green-500 text-white" : "hover:bg-green-500/10 text-green-500"} ${disableVerification ? "opacity-40 cursor-not-allowed" : ""}`}
+                            title="Approve Proof"
+                          >
+                            {isUpdating ? (
+                              <Loader2 className="animate-spin" size={18} />
+                            ) : (
+                              <CheckCircle2 size={18} />
+                            )}
+                          </button>
+                          <button
+                            onClick={() => rejectWinner(w)}
+                            disabled={disableVerification}
+                            className={`p-2 rounded-lg transition-all ${w.verification_status === "rejected" ? "bg-red-500 text-white" : "hover:bg-red-500/10 text-red-500"} ${disableVerification ? "opacity-40 cursor-not-allowed" : ""}`}
+                            title={
+                              isPaid
+                                ? "Cannot reject after payment is marked paid"
+                                : "Reject Proof"
+                            }
+                          >
+                            <XCircle size={18} />
+                          </button>
+                        </>
+                      );
+                    })()}
                   </div>
                 </td>
                 <td className="px-6 py-4">

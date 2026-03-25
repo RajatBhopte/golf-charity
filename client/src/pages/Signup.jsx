@@ -21,7 +21,8 @@ import {
 import Navbar from "../components/Navbar";
 
 export default function Signup() {
-  const { loginWithGoogle, login, session, refreshUserData } = useAuth();
+  const { loginWithGoogle, login, session, user, loading, refreshUserData } =
+    useAuth();
   const { isDark } = useTheme();
   const navigate = useNavigate();
   const location = useLocation();
@@ -36,7 +37,6 @@ export default function Signup() {
     fullName: "",
     email: "",
     password: "",
-    plan: "monthly",
     charityId: "",
     charityPercentage: 10,
   });
@@ -49,6 +49,8 @@ export default function Signup() {
 
   const isGoogleOnboarding =
     new URLSearchParams(location.search).get("oauth") === "google";
+  const shouldResumeOAuthOnboarding =
+    Boolean(session?.user) && !user?.charity_id;
 
   const baseInputStyles = `block w-full pl-10 pr-3 py-3 rounded-xl border text-sm transition-colors focus:ring-2 focus:ring-brand-500 focus:outline-none ${
     isDark
@@ -84,7 +86,27 @@ export default function Signup() {
   }, []);
 
   useEffect(() => {
-    if (!isGoogleOnboarding || !session?.user) return;
+    if (loading) return;
+
+    // Existing subscribed users should never be sent through signup/payment again.
+    if (session?.user && user?.subscription_status === "active") {
+      navigate("/dashboard", { replace: true });
+      return;
+    }
+
+    // Existing non-active users who already completed profile setup
+    // should go straight to the single subscription page.
+    if (session?.user && user?.charity_id && !isGoogleOnboarding) {
+      navigate("/subscribe", { replace: true });
+      return;
+    }
+
+    if (
+      !session?.user ||
+      (!isGoogleOnboarding && !shouldResumeOAuthOnboarding)
+    ) {
+      return;
+    }
 
     setFormData((current) => ({
       ...current,
@@ -96,10 +118,18 @@ export default function Signup() {
       email: current.email || session.user.email || "",
     }));
 
-    // For Google onboarding we take users directly to charity preferences.
-    setStep(3);
+    // Google onboarding should always land on charity selection first.
+    setStep(2);
     setError(null);
-  }, [isGoogleOnboarding, session?.user]);
+  }, [
+    loading,
+    navigate,
+    isGoogleOnboarding,
+    shouldResumeOAuthOnboarding,
+    session?.user,
+    user?.charity_id,
+    user?.subscription_status,
+  ]);
 
   const handleNextStep = async () => {
     const isValid = await trigger();
@@ -116,28 +146,13 @@ export default function Signup() {
 
   const handleGoogleSignup = async () => {
     try {
-      const { error: authError } = await loginWithGoogle("/signup?oauth=google");
+      const { error: authError } = await loginWithGoogle(
+        "/signup?oauth=google",
+      );
       if (authError) throw authError;
     } catch (err) {
       setError(err.message || "Failed to sign up with Google");
     }
-  };
-
-  const goToCharityStep = () => {
-    if (charitiesLoading) {
-      setError("Please wait for charities to finish loading.");
-      return;
-    }
-
-    if (!charities.length) {
-      setError(
-        "No charities are available yet. Ask an admin to add one first.",
-      );
-      return;
-    }
-
-    setStep(3);
-    setError(null);
   };
 
   const handleFinalSubmit = async () => {
@@ -146,11 +161,16 @@ export default function Signup() {
       return;
     }
 
+    const normalizedPlan = "monthly";
+
     setIsLoading(true);
     setError(null);
 
     try {
-      if (isGoogleOnboarding && session?.user?.id) {
+      if (
+        (isGoogleOnboarding || shouldResumeOAuthOnboarding) &&
+        session?.user?.id
+      ) {
         await api.post("/auth/sync", {
           id: session.user.id,
           full_name:
@@ -159,7 +179,7 @@ export default function Signup() {
             session.user.user_metadata?.name ||
             session.user.email?.split("@")[0] ||
             "Player",
-          plan: formData.plan,
+          plan: normalizedPlan,
           charity_id: formData.charityId,
           charity_percentage: Number(formData.charityPercentage),
         });
@@ -169,7 +189,7 @@ export default function Signup() {
           email: formData.email,
           password: formData.password,
           full_name: formData.fullName,
-          plan: formData.plan,
+          plan: normalizedPlan,
           charity_id: formData.charityId,
           charity_percentage: Number(formData.charityPercentage),
         });
@@ -181,7 +201,7 @@ export default function Signup() {
         if (loginError) throw loginError;
       }
 
-      setStep(4);
+      navigate("/subscribe", { replace: true });
     } catch (err) {
       setError(err.message || "An error occurred during signup");
     } finally {
@@ -196,10 +216,10 @@ export default function Signup() {
       <Navbar />
 
       <main className="flex-1 flex flex-col items-center justify-center p-4 sm:p-6 lg:p-8 pt-24">
-        {step < 4 && (
+        {step < 3 && (
           <div className="w-full max-w-lg mb-8">
             <div className="flex justify-between items-center mb-2">
-              {[1, 2, 3].map((i) => (
+              {[1, 2].map((i) => (
                 <div
                   key={i}
                   className={`flex-1 h-2 rounded-full mx-1 transition-colors duration-300 ${
@@ -215,7 +235,7 @@ export default function Signup() {
             <div
               className={`text-center text-xs font-semibold uppercase tracking-wider ${isDark ? "text-gray-400" : "text-gray-500"}`}
             >
-              Step {step} of 3
+              Step {step} of 2
             </div>
           </div>
         )}
@@ -430,7 +450,7 @@ export default function Signup() {
                     onClick={handleNextStep}
                     className="w-full btn-primary flex justify-center py-3.5 mt-4 items-center gap-2"
                   >
-                    Continue to Plan <ArrowRight size={18} />
+                    Continue to Charity <ArrowRight size={18} />
                   </button>
                 </form>
 
@@ -460,135 +480,12 @@ export default function Signup() {
                   <h1
                     className={`text-2xl font-bold mb-2 tracking-tight ${isDark ? "text-white" : "text-light-text"}`}
                   >
-                    Select your <span className="gradient-text">Plan</span>
-                  </h1>
-                  <p
-                    className={`text-sm ${isDark ? "text-gray-400" : "text-light-subtext"}`}
-                  >
-                    Choose how you want to play and give back.
-                  </p>
-                </div>
-
-                <div className="space-y-4 mb-8">
-                  {[
-                    {
-                      id: "monthly",
-                      title: "Monthly Play",
-                      price: "Rs 1,500",
-                      cadence: "/mo",
-                      items: [
-                        "Enter up to 5 rolling scores",
-                        "Participate in monthly draws",
-                        "Donate to your chosen charity",
-                        "Cancel anytime",
-                      ],
-                    },
-                    {
-                      id: "yearly",
-                      title: "Yearly Play",
-                      price: "Rs 15,000",
-                      cadence: "/yr",
-                      items: [
-                        "Everything in Monthly",
-                        "2 months free",
-                        "Premium leaderboard badge",
-                        "Exclusive event invites",
-                      ],
-                      badge: "Save Rs 3,000",
-                    },
-                  ].map((plan) => (
-                    <div
-                      key={plan.id}
-                      onClick={() =>
-                        setFormData((current) => ({
-                          ...current,
-                          plan: plan.id,
-                        }))
-                      }
-                      className={`relative p-5 rounded-2xl border-2 cursor-pointer transition-all duration-200 ${
-                        formData.plan === plan.id
-                          ? `border-brand-500 ${isDark ? "bg-brand-500/10" : "bg-brand-50"}`
-                          : isDark
-                            ? "border-dark-border bg-dark-surface hover:border-gray-600"
-                            : "border-gray-200 bg-white hover:border-gray-300"
-                      }`}
-                    >
-                      {plan.badge && (
-                        <div className="absolute -top-3 right-4 bg-brand-500 text-white text-xs font-bold px-2 py-0.5 rounded-full">
-                          {plan.badge}
-                        </div>
-                      )}
-                      <div className="flex justify-between items-start mb-2">
-                        <h3
-                          className={`font-bold text-lg ${isDark ? "text-white" : "text-light-text"}`}
-                        >
-                          {plan.title}
-                        </h3>
-                        <div className="text-right">
-                          <span
-                            className={`font-bold text-lg ${isDark ? "text-white" : "text-light-text"}`}
-                          >
-                            {plan.price}
-                          </span>
-                          <span
-                            className={`text-xs ml-1 ${isDark ? "text-gray-400" : "text-gray-500"}`}
-                          >
-                            {plan.cadence}
-                          </span>
-                        </div>
-                      </div>
-                      <ul
-                        className={`text-sm space-y-1 ${isDark ? "text-gray-300" : "text-gray-600"}`}
-                      >
-                        {plan.items.map((item) => (
-                          <li key={item}>- {item}</li>
-                        ))}
-                      </ul>
-                    </div>
-                  ))}
-                </div>
-
-                <div className="flex gap-4">
-                  <button
-                    type="button"
-                    onClick={handlePrevStep}
-                    className={`flex-1 flex justify-center items-center py-3.5 rounded-xl font-medium transition-colors border ${
-                      isDark
-                        ? "border-dark-border text-white hover:bg-dark-surface"
-                        : "border-light-border text-light-text hover:bg-gray-100"
-                    }`}
-                  >
-                    Back
-                  </button>
-                  <button
-                    type="button"
-                    onClick={goToCharityStep}
-                    className="flex-[2] btn-primary flex justify-center py-3.5 items-center gap-2"
-                  >
-                    Choose Charity <ArrowRight size={18} />
-                  </button>
-                </div>
-              </motion.div>
-            )}
-
-            {step === 3 && (
-              <motion.div
-                key="step3"
-                initial={{ opacity: 0, x: 20 }}
-                animate={{ opacity: 1, x: 0 }}
-                exit={{ opacity: 0, x: -20 }}
-                transition={{ duration: 0.3 }}
-              >
-                <div className="text-center mb-6">
-                  <h1
-                    className={`text-2xl font-bold mb-2 tracking-tight ${isDark ? "text-white" : "text-light-text"}`}
-                  >
                     Choose Your <span className="gradient-text">Impact</span>
                   </h1>
                   <p
                     className={`text-sm ${isDark ? "text-gray-400" : "text-light-subtext"}`}
                   >
-                    Where should your contribution go?
+                    Select the charity you want to support.
                   </p>
                 </div>
 
@@ -703,13 +600,6 @@ export default function Signup() {
                     <span>50%</span>
                     <span>100%</span>
                   </div>
-
-                  <p
-                    className={`mt-3 text-xs font-semibold ${isDark ? "text-amber-300" : "text-amber-600"}`}
-                  >
-                    Note: Your account is created as pending. Full score and
-                    draw access unlocks after successful subscription payment.
-                  </p>
                 </div>
 
                 <div className="flex gap-4">
@@ -740,60 +630,10 @@ export default function Signup() {
                     {isLoading ? (
                       <div className="w-5 h-5 border-2 border-white/20 border-t-white rounded-full animate-spin" />
                     ) : (
-                      isGoogleOnboarding ? "Continue" : "Create Account"
+                      "Continue to Subscription"
                     )}
                   </button>
                 </div>
-              </motion.div>
-            )}
-
-            {step === 4 && (
-              <motion.div
-                key="step4"
-                initial={{ opacity: 0, scale: 0.95 }}
-                animate={{ opacity: 1, scale: 1 }}
-                transition={{ duration: 0.4 }}
-                className="text-center py-6"
-              >
-                <div className="w-20 h-20 bg-brand-500/10 rounded-full flex items-center justify-center mx-auto mb-6">
-                  <CheckCircle className="w-10 h-10 text-brand-500" />
-                </div>
-                <h1
-                  className={`text-3xl font-bold mb-3 tracking-tight ${isDark ? "text-white" : "text-light-text"}`}
-                >
-                  Account <span className="gradient-text">Created</span>
-                </h1>
-                <p
-                  className={`text-sm leading-relaxed mb-8 max-w-sm mx-auto ${isDark ? "text-gray-400" : "text-light-subtext"}`}
-                >
-                  Your account is ready. You can activate subscription now or
-                  pay later and continue with limited access.
-                </p>
-
-                <div className="space-y-3">
-                  <button
-                    onClick={() => navigate("/subscribe", { replace: true })}
-                    className="w-full btn-primary flex justify-center py-3.5"
-                  >
-                    Pay Now and Unlock Full Access
-                  </button>
-                  <button
-                    onClick={() => navigate("/", { replace: true })}
-                    className={`w-full py-3.5 rounded-xl border font-semibold transition-colors ${
-                      isDark
-                        ? "border-dark-border text-gray-200 hover:bg-dark-surface"
-                        : "border-light-border text-light-text hover:bg-gray-100"
-                    }`}
-                  >
-                    Pay Later (Limited Access)
-                  </button>
-                </div>
-
-                <p
-                  className={`mt-3 text-xs ${isDark ? "text-gray-500" : "text-gray-500"}`}
-                >
-                  You can activate anytime from Subscribe.
-                </p>
               </motion.div>
             )}
           </AnimatePresence>

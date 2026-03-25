@@ -41,7 +41,7 @@ export default function Login() {
 
   const handleGoogleLogin = async () => {
     try {
-      const { error: authError } = await loginWithGoogle(from);
+      const { error: authError } = await loginWithGoogle();
       if (authError) throw authError;
     } catch (err) {
       setError(err.message || "Failed to login with Google");

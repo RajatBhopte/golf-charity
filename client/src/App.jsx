@@ -1,4 +1,9 @@
-import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
+import {
+  BrowserRouter as Router,
+  Routes,
+  Route,
+  Navigate,
+} from "react-router-dom";
 import { ThemeProvider } from "./context/ThemeContext";
 import { AuthProvider } from "./context/AuthContext";
 import { AuthRoute, AdminRoute } from "./components/ProtectedRoute";
@@ -10,6 +15,7 @@ import Signup from "./pages/Signup";
 import ResetPassword from "./pages/ResetPassword";
 import Dashboard from "./pages/Dashboard";
 import Subscribe from "./pages/Subscribe";
+import Charities from "./pages/Charities";
 import AdminDashboard from "./pages/AdminDashboard";
 import AdminLogin from "./pages/AdminLogin";
 
@@ -23,7 +29,12 @@ function App() {
             <Route path="/" element={<Home />} />
             <Route path="/login" element={<Login />} />
             <Route path="/signup" element={<Signup />} />
+            <Route
+              path="/get-started"
+              element={<Navigate to="/signup" replace />}
+            />
             <Route path="/reset-password" element={<ResetPassword />} />
+            <Route path="/charities" element={<Charities />} />
             <Route path="/admin/login" element={<AdminLogin />} />
 
             {/* Protected Routes (Login Required) */}

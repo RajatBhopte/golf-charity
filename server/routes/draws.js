@@ -52,6 +52,32 @@ const parseDataUrl = (dataUrl) => {
   };
 };
 
+const toNumberArray = (value) => {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value
+    .map((item) => Number(item))
+    .filter((item) => Number.isFinite(item));
+};
+
+const deriveMatchedNumbers = (winner) => {
+  const stored = toNumberArray(winner?.matched_numbers);
+  if (stored.length) {
+    return stored;
+  }
+
+  const submitted = toNumberArray(winner?.submitted_scores);
+  const winning = toNumberArray(winner?.draws?.winning_numbers);
+  if (!submitted.length || !winning.length) {
+    return [];
+  }
+
+  const submittedSet = new Set(submitted);
+  return winning.filter((number) => submittedSet.has(number));
+};
+
 const attachProofUrls = async (wins) =>
   Promise.all(
     (wins || []).map(async (win) => {
@@ -141,7 +167,11 @@ router.get("/my-wins", requireActiveSubscription, async (req, res) => {
 
     if (error) throw error;
     const wins = await attachProofUrls(data || []);
-    res.json(wins);
+    const normalizedWins = wins.map((winner) => ({
+      ...winner,
+      matched_numbers: deriveMatchedNumbers(winner),
+    }));
+    res.json(normalizedWins);
   } catch (error) {
     console.error("My wins route error:", error);
     res.status(500).json({ error: "Failed to fetch winner history" });
@@ -319,6 +349,39 @@ router.get("/notifications", requireActiveSubscription, async (req, res) => {
     res.status(500).json({ error: "Failed to fetch notifications" });
   }
 });
+
+router.delete(
+  "/notifications/clear-all",
+  requireActiveSubscription,
+  async (req, res) => {
+    try {
+      const { count, error: countError } = await supabase
+        .from("notifications")
+        .select("id", { count: "exact", head: true })
+        .eq("user_id", req.user.id);
+
+      if (countError && isMissingSchemaError(countError)) {
+        return res.json({ success: true, deleted_count: 0 });
+      }
+      if (countError) throw countError;
+
+      const { error: deleteError } = await supabase
+        .from("notifications")
+        .delete()
+        .eq("user_id", req.user.id);
+
+      if (deleteError && isMissingSchemaError(deleteError)) {
+        return res.json({ success: true, deleted_count: 0 });
+      }
+      if (deleteError) throw deleteError;
+
+      res.json({ success: true, deleted_count: count || 0 });
+    } catch (error) {
+      console.error("Clear notifications error:", error);
+      res.status(500).json({ error: "Failed to clear notifications" });
+    }
+  },
+);
 
 router.patch(
   "/notifications/:id/read",

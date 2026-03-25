@@ -2,6 +2,11 @@ const express = require("express");
 const router = express.Router();
 const supabase = require("../utils/supabase");
 const { requireAdmin } = require("../middleware/adminMiddleware");
+const {
+  sendWinnerAnnouncementEmail,
+  sendWinnerVerificationEmail,
+  sendWinnerPaymentEmail,
+} = require("../utils/email");
 
 const VALID_ROLES = ["user", "admin"];
 const VALID_SUBSCRIPTION_PLANS = ["monthly", "yearly"];
@@ -44,6 +49,24 @@ const isMissingJackpotRolloverColumn = (error) => {
       message.includes("does not exist")) ||
     message.includes("'jackpot_rollover' column of 'draws'")
   );
+};
+
+const getMissingWinnerColumnName = (error) => {
+  const message = String(error?.message || "");
+  const singleQuoteMatch = message.match(/'([^']+)' column of 'winners'/i);
+  if (singleQuoteMatch) {
+    return singleQuoteMatch[1];
+  }
+
+  const lower = message.toLowerCase();
+  if (!lower.includes("winners")) {
+    return null;
+  }
+
+  const genericColumnMatch = message.match(
+    /column ["`']?([a-zA-Z0-9_]+)["`']?/i,
+  );
+  return genericColumnMatch?.[1] || null;
 };
 
 const getMissingCharityColumnName = (error) => {
@@ -250,6 +273,39 @@ const sortNumbersAscending = (numbers = []) =>
   [...numbers].sort((left, right) => left - right);
 
 const formatNumberSeries = (numbers = []) => numbers.join(", ");
+
+const toNumberArray = (value) => {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value
+    .map((item) => Number(item))
+    .filter((item) => Number.isFinite(item));
+};
+
+const deriveMatchedNumbers = (winner) => {
+  const stored = toNumberArray(winner?.matched_numbers);
+  if (stored.length) {
+    return stored;
+  }
+
+  const submitted = toNumberArray(winner?.submitted_scores);
+  const winning = toNumberArray(winner?.draws?.winning_numbers);
+  if (submitted.length && winning.length) {
+    const submittedSet = new Set(submitted);
+    const derived = winning.filter((number) => submittedSet.has(number));
+    if (derived.length) {
+      return derived;
+    }
+  }
+
+  const auditLogMatch = (winner?.audit_logs || [])
+    .map((log) => toNumberArray(log?.metadata?.matched_numbers))
+    .find((numbers) => numbers.length > 0);
+
+  return auditLogMatch || [];
+};
 
 const normalizeWinningNumbers = (numbers = []) => {
   const normalized = [
@@ -649,6 +705,45 @@ const insertWinnerAuditLogs = async (records) => {
   }
 };
 
+const sendWinnerAnnouncementEmails = async (winners, monthYear) => {
+  const winnerRows = Array.isArray(winners) ? winners : [];
+  if (!winnerRows.length) {
+    return;
+  }
+
+  const winnerUserIds = winnerRows
+    .map((winner) => winner.user_id)
+    .filter(Boolean);
+  if (!winnerUserIds.length) {
+    return;
+  }
+
+  const { data: users, error } = await supabase
+    .from("users")
+    .select("id, full_name, email")
+    .in("id", winnerUserIds);
+
+  if (error) {
+    console.warn("Winner email user lookup skipped:", error.message);
+    return;
+  }
+
+  const userMap = new Map((users || []).map((user) => [user.id, user]));
+
+  await Promise.all(
+    winnerRows.map((winner) => {
+      const winnerUser = userMap.get(winner.user_id);
+      return sendWinnerAnnouncementEmail({
+        to: winnerUser?.email,
+        fullName: winnerUser?.full_name,
+        monthLabel: monthYear,
+        tier: winner.prize_tier,
+        amount: winner.amount,
+      });
+    }),
+  );
+};
+
 const attachProofUrls = async (winners) =>
   Promise.all(
     (winners || []).map(async (winner) => {
@@ -705,7 +800,11 @@ const attachWinnerAuditLogs = async (winners) => {
 
 const enrichWinners = async (winners) => {
   const withProofUrls = await attachProofUrls(winners || []);
-  return attachWinnerAuditLogs(withProofUrls);
+  const withAuditLogs = await attachWinnerAuditLogs(withProofUrls);
+  return withAuditLogs.map((winner) => ({
+    ...winner,
+    matched_numbers: deriveMatchedNumbers(winner),
+  }));
 };
 
 const listCharitiesWithFallback = async () => {
@@ -1289,6 +1388,51 @@ router.post("/draws/publish", requireAdmin, async (req, res) => {
     });
     const { monthYear } = getMonthRange(req.body.month_year);
 
+    const insertWinnerRecordsWithFallback = async (winnerRecords) => {
+      if (!winnerRecords.length) {
+        return [];
+      }
+
+      const optionalColumns = new Set([
+        "matched_numbers",
+        "submitted_scores",
+        "verification_status",
+        "payment_status",
+      ]);
+      const omittedColumns = new Set();
+
+      while (true) {
+        const payload = winnerRecords.map((winner) => {
+          const record = { ...winner };
+          for (const column of omittedColumns) {
+            delete record[column];
+          }
+          return record;
+        });
+
+        const { data: createdWinners, error: winnerError } = await supabase
+          .from("winners")
+          .insert(payload)
+          .select();
+
+        if (!winnerError) {
+          return createdWinners || [];
+        }
+
+        const missingColumn = getMissingWinnerColumnName(winnerError);
+        const canOmit =
+          missingColumn &&
+          optionalColumns.has(missingColumn) &&
+          !omittedColumns.has(missingColumn);
+
+        if (!canOmit) {
+          throw winnerError;
+        }
+
+        omittedColumns.add(missingColumn);
+      }
+    };
+
     const { data: existingDraw, error: existingDrawError } = await supabase
       .from("draws")
       .select("id, winning_numbers")
@@ -1302,6 +1446,71 @@ router.post("/draws/publish", requireAdmin, async (req, res) => {
         .from("winners")
         .select("id", { count: "exact", head: true })
         .eq("draw_id", existingDraw.id);
+
+      if (!winnerCount) {
+        const repairWinnerRecords = Object.values(
+          simulation.prize_breakdown || {},
+        ).flatMap((tierResult) =>
+          tierResult.winners.map((winner) => ({
+            draw_id: existingDraw.id,
+            user_id: winner.id,
+            prize_tier: tierResult.tier,
+            amount: tierResult.per_winner_amount,
+            matched_numbers: winner.matched_numbers,
+            submitted_scores: winner.submitted_scores,
+            verification_status: "pending",
+            payment_status: "pending",
+          })),
+        );
+
+        const repairedWinners =
+          await insertWinnerRecordsWithFallback(repairWinnerRecords);
+
+        await Promise.all([
+          insertWinnerAuditLogs(
+            repairedWinners.map((winner) => ({
+              winner_id: winner.id,
+              actor_user_id: req.user.id,
+              action: "draw_published_repair",
+              notes: `Winner repaired for draw ${monthYear}`,
+              metadata: {
+                draw_id: existingDraw.id,
+                prize_tier: winner.prize_tier,
+                amount: winner.amount,
+                winning_numbers:
+                  existingDraw.winning_numbers || simulation.winning_numbers,
+                matched_numbers: winner.matched_numbers || [],
+              },
+            })),
+          ),
+          insertNotifications(
+            repairedWinners.map((winner) => ({
+              user_id: winner.user_id,
+              type: "winner-announcement",
+              title: "You have won this month’s draw",
+              message: `You matched ${winner.prize_tier} winning numbers (${formatNumberSeries(winner.matched_numbers || [])}) and have a pending reward of INR ${parseNumber(winner.amount, 0).toLocaleString("en-IN")}.`,
+              metadata: {
+                draw_id: existingDraw.id,
+                winner_id: winner.id,
+                month_year: monthYear,
+                winning_numbers:
+                  existingDraw.winning_numbers || simulation.winning_numbers,
+              },
+            })),
+          ),
+          sendWinnerAnnouncementEmails(repairedWinners, monthYear),
+        ]);
+
+        return res.json({
+          message: "Draw already published; winner records repaired",
+          draw_id: existingDraw.id,
+          winner_count: repairedWinners.length,
+          winning_numbers:
+            existingDraw.winning_numbers || simulation.winning_numbers,
+          already_published: true,
+          repaired: true,
+        });
+      }
 
       return res.json({
         message: "Draw already published for this month",
@@ -1327,14 +1536,20 @@ router.post("/draws/publish", requireAdmin, async (req, res) => {
       payload.jackpot_rollover = simulation.outgoing_jackpot_rollover;
     }
 
-    const { data: draw, error: drawError } = await supabase
+    let draw = null;
+    let drawInsertError = null;
+
+    const drawInsertResult = await supabase
       .from("draws")
       .insert([payload])
       .select()
       .single();
 
-    if (drawError) {
-      if (isMissingJackpotRolloverColumn(drawError)) {
+    draw = drawInsertResult.data;
+    drawInsertError = drawInsertResult.error;
+
+    if (drawInsertError) {
+      if (isMissingJackpotRolloverColumn(drawInsertError)) {
         // Retry without jackpot_rollover
         const { data: retryDraw, error: retryError } = await supabase
           .from("draws")
@@ -1353,9 +1568,9 @@ router.post("/draws/publish", requireAdmin, async (req, res) => {
           .single();
 
         if (retryError) throw retryError;
-        // manually set draw and continue
+        draw = retryDraw;
       } else {
-        throw drawError;
+        throw drawInsertError;
       }
     }
 
@@ -1376,13 +1591,7 @@ router.post("/draws/publish", requireAdmin, async (req, res) => {
 
     let insertedWinners = [];
     if (winnerRecords.length > 0) {
-      const { data: createdWinners, error: winnerError } = await supabase
-        .from("winners")
-        .insert(winnerRecords)
-        .select();
-
-      if (winnerError) throw winnerError;
-      insertedWinners = createdWinners || [];
+      insertedWinners = await insertWinnerRecordsWithFallback(winnerRecords);
 
       await Promise.all([
         insertWinnerAuditLogs(
@@ -1414,6 +1623,7 @@ router.post("/draws/publish", requireAdmin, async (req, res) => {
             },
           })),
         ),
+        sendWinnerAnnouncementEmails(insertedWinners, monthYear),
       ]);
     }
 
@@ -1520,6 +1730,26 @@ router.put("/winners/:id", requireAdmin, async (req, res) => {
       .single();
 
     if (winnerFetchError) throw winnerFetchError;
+
+    if (
+      currentWinner.payment_status === "paid" &&
+      verification_status !== undefined &&
+      verification_status !== currentWinner.verification_status
+    ) {
+      return res.status(400).json({
+        error: "Verification status is locked after payment is marked as paid",
+      });
+    }
+
+    if (
+      currentWinner.payment_status === "paid" &&
+      payment_status !== undefined &&
+      payment_status !== "paid"
+    ) {
+      return res.status(400).json({
+        error: "Paid winners cannot be moved back to pending payment",
+      });
+    }
 
     if (payment_status === "paid" && currentWinner.payment_status === "paid") {
       return res
@@ -1636,6 +1866,21 @@ router.put("/winners/:id", requireAdmin, async (req, res) => {
             : null,
         ].filter(Boolean),
       ),
+      verification_status
+        ? sendWinnerVerificationEmail({
+            to: data?.users?.email,
+            fullName: data?.users?.full_name,
+            status: verification_status,
+            rejectionReason: rejection_reason,
+          })
+        : Promise.resolve(),
+      paymentStatusChanged && payment_status === "paid"
+        ? sendWinnerPaymentEmail({
+            to: data?.users?.email,
+            fullName: data?.users?.full_name,
+            amount: data?.amount,
+          })
+        : Promise.resolve(),
     ]);
 
     const [enrichedWinner] = await enrichWinners([data]);

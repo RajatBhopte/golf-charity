@@ -154,17 +154,33 @@ router.post("/sync", async (req, res) => {
       });
     }
 
-    // Insert or update the public user profile
+    // Check whether this user already has a profile row so we don't overwrite
+    // an active subscription with 'pending'.
+    const { data: existingProfile } = await supabase
+      .from("users")
+      .select("subscription_status")
+      .eq("id", id)
+      .maybeSingle();
+
+    const isExistingActiveUser =
+      existingProfile?.subscription_status === "active";
+
+    // Build the upsert payload.  If the user already has an active subscription
+    // we only update identity / charity fields and leave subscription_status alone.
     const payload = {
       id: user.id,
       full_name,
       role: "user",
       email: user.email || null,
-      subscription_plan: plan || "monthly",
       charity_id: charity_id || null,
       charity_percentage: parseInt(charity_percentage, 10) || 10,
-      subscription_status: "pending",
       created_at: new Date().toISOString(),
+      ...(isExistingActiveUser
+        ? {} // preserve existing subscription_status and subscription_plan
+        : {
+            subscription_plan: plan || "monthly",
+            subscription_status: "pending",
+          }),
     };
 
     let { error } = await supabase

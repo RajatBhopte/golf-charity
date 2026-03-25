@@ -11,12 +11,32 @@ const PLAN_OPTIONS = [
     label: "Monthly",
     amountInr: 1500,
     description: "Flexible plan billed every month.",
+    perks: [
+      "Up to 5 rolling scores",
+      "Monthly draw eligibility",
+      "Charity donations",
+      "Cancel anytime",
+    ],
   },
   {
     id: "yearly",
     label: "Yearly",
     amountInr: 15000,
     description: "Save with annual billing.",
+    badge: "Save Rs 3,000",
+    perks: [
+      "Everything in Monthly",
+      "2 months free",
+      "Premium leaderboard badge",
+      "Exclusive event invites",
+    ],
+  },
+  {
+    id: "pay_later",
+    label: "Pay Later",
+    amountInr: 0,
+    description: "Limited access, pay anytime.",
+    perks: ["Explore the platform", "Scores & draws locked", "Upgrade anytime"],
   },
 ];
 
@@ -59,6 +79,11 @@ export default function Subscribe() {
   );
 
   const handleCheckout = async () => {
+    if (selectedPlan === "pay_later") {
+      navigate("/dashboard", { replace: true });
+      return;
+    }
+
     setError("");
     setIsProcessing(true);
 
@@ -78,7 +103,7 @@ export default function Subscribe() {
         key: orderData.key_id,
         amount: orderData.amount,
         currency: orderData.currency,
-        name: "Golf Charity Platform",
+        name: "SwingSave",
         description: `${selectedPlanDetails.label} Subscription`,
         order_id: orderData.order_id,
         prefill: {
@@ -134,51 +159,32 @@ export default function Subscribe() {
     }
   };
 
+  const handlePayLater = () => {
+    navigate("/dashboard", { replace: true });
+  };
+
   return (
     <div
       className={`min-h-screen ${isDark ? "bg-dark-bg text-white" : "bg-light-bg text-light-text"}`}
     >
       <Navbar />
-      <main className="p-6 pt-24 max-w-xl mx-auto">
-        <div className="glass-card rounded-3xl p-8 sm:p-10">
-          <h1 className="text-3xl font-bold mb-3">
-            Activate your <span className="gradient-text">subscription</span>
-          </h1>
-          <p
-            className={`mb-8 ${isDark ? "text-gray-400" : "text-light-subtext"}`}
-          >
-            Choose a plan and complete payment through Razorpay to unlock your
-            dashboard.
-          </p>
-
-          <div
-            className={`mb-8 rounded-2xl border p-4 sm:p-5 ${
-              isDark
-                ? "border-amber-500/30 bg-amber-500/10"
-                : "border-amber-400/40 bg-amber-50"
-            }`}
-          >
-            <h2 className="text-sm font-black uppercase tracking-[0.14em] text-amber-500 mb-3">
-              Restricted Access Until Payment
-            </h2>
-            <ul
-              className={`space-y-2 text-sm ${
-                isDark ? "text-gray-300" : "text-slate-700"
+      <main className="px-4 pb-12 pt-24 sm:px-6 lg:px-8">
+        <section className="mx-auto w-full max-w-5xl">
+          <div className="mb-10 text-center">
+            <h1 className="text-4xl font-black tracking-tight sm:text-5xl">
+              Choose your <span className="gradient-text">plan</span>
+            </h1>
+            <p
+              className={`mx-auto mt-4 max-w-2xl text-lg ${
+                isDark ? "text-gray-400" : "text-slate-600"
               }`}
             >
-              <li>- You can explore charities and platform features.</li>
-              <li>
-                - Score entry and draw participation are locked until
-                subscription is active.
-              </li>
-              <li>
-                - Every protected request is validated in real-time for active
-                status.
-              </li>
-            </ul>
+              Select Monthly, Yearly, or explore with limited free access. You
+              can upgrade anytime.
+            </p>
           </div>
 
-          <div className="space-y-3 mb-8">
+          <div className="grid gap-4 md:grid-cols-3">
             {PLAN_OPTIONS.map((plan) => {
               const isSelected = selectedPlan === plan.id;
               return (
@@ -186,58 +192,104 @@ export default function Subscribe() {
                   key={plan.id}
                   type="button"
                   onClick={() => setSelectedPlan(plan.id)}
-                  className={`w-full text-left rounded-2xl border px-5 py-4 transition-all ${
+                  className={`relative rounded-3xl border p-6 text-left transition-all ${
                     isSelected
-                      ? "border-brand-500 bg-brand-500/10"
+                      ? "border-brand-500 bg-brand-500/10 shadow-[0_0_0_1px_rgba(34,197,94,0.25)]"
                       : isDark
-                        ? "border-dark-border hover:border-brand-500/40"
-                        : "border-light-border hover:border-brand-500/40"
+                        ? "border-dark-border bg-dark-card/50 hover:border-brand-500/40"
+                        : "border-light-border bg-white hover:border-brand-500/40"
                   }`}
                 >
-                  <div className="flex items-center justify-between gap-3">
-                    <div>
-                      <p className="font-bold text-lg">{plan.label}</p>
-                      <p
-                        className={`text-sm ${isDark ? "text-gray-400" : "text-light-subtext"}`}
-                      >
-                        {plan.description}
-                      </p>
-                    </div>
-                    <p className="font-bold text-xl">
-                      {formatInr(plan.amountInr)}
-                    </p>
+                  {plan.badge && (
+                    <span className="absolute -top-3 right-4 rounded-full bg-brand-500 px-3 py-1 text-xs font-bold text-white">
+                      {plan.badge}
+                    </span>
+                  )}
+                  <p className="text-3xl font-bold leading-none">
+                    {plan.label}
+                  </p>
+                  <div className="mt-4 flex items-end gap-1">
+                    <span className="text-4xl font-black">
+                      {plan.id === "pay_later"
+                        ? "Free"
+                        : formatInr(plan.amountInr).replace("₹", "₹")}
+                    </span>
+                    {plan.id !== "pay_later" && (
+                      <span className="pb-1 text-base text-gray-400">
+                        /{plan.id === "yearly" ? "year" : "month"}
+                      </span>
+                    )}
+                    {plan.id === "pay_later" && (
+                      <span className="pb-1 text-base text-gray-400">
+                        for now
+                      </span>
+                    )}
                   </div>
+                  <p
+                    className={`mt-3 text-lg ${
+                      isDark ? "text-gray-300" : "text-slate-600"
+                    }`}
+                  >
+                    {plan.description}
+                  </p>
+                  <ul className="mt-5 space-y-1.5 text-base">
+                    {plan.perks.map((perk) => (
+                      <li key={perk} className="flex items-start gap-2">
+                        <span className="text-brand-500">✓</span>
+                        <span
+                          className={
+                            isDark ? "text-gray-200" : "text-slate-700"
+                          }
+                        >
+                          {perk}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
                 </button>
               );
             })}
           </div>
 
           {error && (
-            <div className="mb-6 rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-400">
+            <div className="mx-auto mt-6 max-w-3xl rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-400">
               {error}
             </div>
           )}
 
-          <button
-            type="button"
-            onClick={handleCheckout}
-            disabled={isProcessing}
-            className="btn-primary w-full py-4 disabled:opacity-60 disabled:cursor-not-allowed"
-          >
-            {isProcessing
-              ? "Processing..."
-              : `Pay ${formatInr(selectedPlanDetails.amountInr)} with Razorpay`}
-          </button>
-
-          <p
-            className={`mt-3 text-center text-xs font-semibold ${
-              isDark ? "text-gray-500" : "text-gray-500"
-            }`}
-          >
-            Activate now to unlock score management, monthly draw eligibility,
-            and full dashboard access.
-          </p>
-        </div>
+          <div className="mx-auto mt-8 max-w-4xl space-y-3">
+            <button
+              type="button"
+              onClick={handleCheckout}
+              disabled={isProcessing}
+              className="btn-primary w-full py-5 text-xl disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {isProcessing
+                ? "Processing..."
+                : selectedPlan === "pay_later"
+                  ? "Continue with Limited Access"
+                  : `Pay ${formatInr(selectedPlanDetails.amountInr)} with Razorpay ->`}
+            </button>
+            {selectedPlan !== "pay_later" && (
+              <button
+                type="button"
+                onClick={handlePayLater}
+                disabled={isProcessing}
+                className={`w-full rounded-xl border py-4 font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${
+                  isDark
+                    ? "border-dark-border text-gray-200 hover:bg-dark-surface"
+                    : "border-light-border text-light-text hover:bg-gray-100"
+                }`}
+              >
+                Pay Later (Limited Access)
+              </button>
+            )}
+            <p className="text-center text-sm text-gray-500">
+              Secure payment via Razorpay. Activate now to unlock scores, draws,
+              and full dashboard access.
+            </p>
+          </div>
+        </section>
       </main>
     </div>
   );

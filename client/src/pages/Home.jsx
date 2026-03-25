@@ -2,6 +2,7 @@
 import { motion } from "framer-motion";
 import { Link } from "react-router-dom";
 import { useEffect, useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import {
   Trophy,
   Heart,
@@ -18,6 +19,7 @@ import {
   Sparkles,
 } from "lucide-react";
 import { useTheme } from "../context/ThemeContext";
+import { useAuth } from "../context/AuthContext";
 import Navbar from "../components/Navbar";
 import Footer from "../components/Footer";
 import { buildApiUrl } from "../utils/apiBase";
@@ -75,8 +77,21 @@ const prizeTiers = [
 
 export default function Home() {
   const { isDark } = useTheme();
+  const { session, user, loading } = useAuth();
+  const navigate = useNavigate();
   const [charities, setCharities] = useState([]);
   const [featuredCharity, setFeaturedCharity] = useState(null);
+
+  useEffect(() => {
+    if (loading || !session?.user) return;
+
+    if (!user?.charity_id) {
+      navigate("/signup?oauth=google", { replace: true });
+      return;
+    }
+
+    navigate("/dashboard", { replace: true });
+  }, [loading, navigate, session?.user, user?.charity_id]);
 
   useEffect(() => {
     const fetchCharities = async () => {
@@ -122,16 +137,32 @@ export default function Home() {
   );
 
   return (
-    <div className={`min-h-screen ${isDark ? "bg-dark-bg" : "bg-light-bg"}`}>
+    <div
+      className={`min-h-screen ${
+        isDark
+          ? "bg-dark-bg"
+          : "bg-gradient-to-b from-slate-50 via-emerald-50/30 to-slate-100"
+      }`}
+    >
       <Navbar />
 
       <section className="relative min-h-screen flex items-center overflow-hidden pt-20">
         <div className="absolute inset-0 overflow-hidden">
-          <div
-            className={`absolute top-1/4 left-1/4 w-96 h-96 rounded-full blur-3xl ${isDark ? "bg-brand-500/5" : "bg-brand-200/30"}`}
+          <motion.div
+            className={`absolute top-1/4 left-1/4 w-96 h-96 rounded-full blur-3xl ${isDark ? "bg-brand-500/5" : "bg-brand-200/20"}`}
+            animate={{
+              x: [0, 10, -8, 0],
+              y: [0, -12, 8, 0],
+            }}
+            transition={{ duration: 16, repeat: Infinity, ease: "easeInOut" }}
           />
-          <div
-            className={`absolute bottom-1/4 right-1/4 w-80 h-80 rounded-full blur-3xl ${isDark ? "bg-brand-600/5" : "bg-brand-100/40"}`}
+          <motion.div
+            className={`absolute bottom-1/4 right-1/4 w-80 h-80 rounded-full blur-3xl ${isDark ? "bg-brand-600/5" : "bg-brand-100/25"}`}
+            animate={{
+              x: [0, -12, 10, 0],
+              y: [0, 9, -10, 0],
+            }}
+            transition={{ duration: 18, repeat: Infinity, ease: "easeInOut" }}
           />
         </div>
 
@@ -143,16 +174,18 @@ export default function Home() {
               transition={{ duration: 0.5 }}
               className="inline-flex items-center gap-2 mb-8"
             >
-              <span
+              <motion.span
                 className={`px-4 py-2 rounded-full text-sm font-medium border ${
                   isDark
                     ? "bg-brand-500/10 border-brand-500/20 text-brand-400"
                     : "bg-brand-50 border-brand-200 text-brand-700"
                 }`}
+                whileHover={{ y: -2, scale: 1.02 }}
+                transition={{ type: "spring", stiffness: 300, damping: 20 }}
               >
                 <Sparkles size={14} className="inline mr-1.5 -mt-0.5" />
                 Golf scores that fund real causes
-              </span>
+              </motion.span>
             </motion.div>
 
             <motion.h1
@@ -170,7 +203,7 @@ export default function Home() {
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.6, delay: 0.2 }}
-              className={`text-lg sm:text-xl max-w-2xl mx-auto mb-4 leading-relaxed ${isDark ? "text-gray-400" : "text-light-subtext"}`}
+              className={`text-lg sm:text-xl max-w-2xl mx-auto mb-4 leading-relaxed ${isDark ? "text-gray-400" : "text-slate-700"}`}
             >
               Subscribe, log your last five Stableford scores, and turn them
               into monthly draw numbers. Win prizes while a portion of every
@@ -188,13 +221,15 @@ export default function Home() {
                 { icon: Trophy, text: "Win Monthly Prizes" },
                 { icon: Heart, text: "Support a Charity" },
               ].map(({ icon: Icon, text }) => (
-                <span
+                <motion.span
                   key={text}
-                  className={`flex items-center gap-2 text-sm font-medium ${isDark ? "text-gray-300" : "text-light-subtext"}`}
+                  className={`flex items-center gap-2 text-sm font-medium ${isDark ? "text-gray-300" : "text-slate-700"}`}
+                  whileHover={{ y: -2, scale: 1.03 }}
+                  transition={{ type: "spring", stiffness: 320, damping: 22 }}
                 >
                   <Icon size={16} className="text-brand-500" />
                   {text}
-                </span>
+                </motion.span>
               ))}
             </motion.div>
 
@@ -204,19 +239,25 @@ export default function Home() {
               transition={{ duration: 0.6, delay: 0.4 }}
               className="flex flex-col items-center gap-3"
             >
-              <Link
-                to="/signup"
-                className="group inline-flex items-center gap-3 px-10 py-5 bg-gradient-to-r from-brand-500 to-brand-600 hover:from-brand-600 hover:to-brand-700 text-white font-bold text-lg rounded-2xl transition-all duration-300 shadow-xl shadow-brand-500/25 hover:shadow-2xl hover:shadow-brand-500/35 hover:-translate-y-0.5 active:scale-[0.98]"
+              <motion.div
+                whileHover={{ y: -3, scale: 1.015 }}
+                whileTap={{ scale: 0.985 }}
+                transition={{ type: "spring", stiffness: 340, damping: 20 }}
               >
-                Start Playing and Giving
-                <ArrowRight
-                  size={20}
-                  className="group-hover:translate-x-1 transition-transform"
-                />
-              </Link>
+                <Link
+                  to="/signup"
+                  className="group inline-flex items-center gap-3 px-10 py-5 bg-gradient-to-r from-brand-500 to-brand-600 hover:from-brand-600 hover:to-brand-700 text-white font-bold text-lg rounded-2xl transition-all duration-300 shadow-xl shadow-brand-500/25 hover:shadow-2xl hover:shadow-brand-500/35"
+                >
+                  Start Playing and Giving
+                  <ArrowRight
+                    size={20}
+                    className="group-hover:translate-x-1 transition-transform"
+                  />
+                </Link>
+              </motion.div>
               <div className="flex flex-col items-center gap-1">
                 <span
-                  className={`text-sm font-semibold ${isDark ? "text-gray-300" : "text-light-subtext"}`}
+                  className={`text-sm font-semibold ${isDark ? "text-gray-300" : "text-slate-700"}`}
                 >
                   Starting at{" "}
                   <span className="text-brand-500">
@@ -224,11 +265,35 @@ export default function Home() {
                   </span>
                 </span>
                 <span
-                  className={`text-xs ${isDark ? "text-gray-500" : "text-light-subtext/70"}`}
+                  className={`text-xs ${isDark ? "text-gray-500" : "text-slate-600"}`}
                 >
                   Cancel anytime
                 </span>
               </div>
+              <motion.div
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.7, duration: 0.4 }}
+                className="flex flex-wrap justify-center gap-2"
+              >
+                {[
+                  "Instant checkout",
+                  "1-click dashboard access",
+                  "Transparent prize tracking",
+                ].map((chip) => (
+                  <motion.span
+                    key={chip}
+                    whileHover={{ y: -2 }}
+                    className={`px-3 py-1 rounded-full text-[11px] font-semibold border ${
+                      isDark
+                        ? "border-dark-border bg-dark-card/70 text-gray-300"
+                        : "border-slate-300 bg-white/80 text-slate-700"
+                    }`}
+                  >
+                    {chip}
+                  </motion.span>
+                ))}
+              </motion.div>
             </motion.div>
 
             <motion.div
@@ -238,7 +303,7 @@ export default function Home() {
               className={`mt-16 grid grid-cols-3 gap-6 max-w-lg mx-auto py-6 px-8 rounded-2xl border ${
                 isDark
                   ? "bg-dark-card/50 border-dark-border"
-                  : "bg-white/80 border-light-border shadow-sm"
+                    : "bg-white/90 border-slate-200 shadow-md"
               }`}
             >
               {[
@@ -251,7 +316,7 @@ export default function Home() {
                     {value}
                   </div>
                   <div
-                    className={`text-xs mt-1 ${isDark ? "text-gray-500" : "text-light-subtext"}`}
+                    className={`text-xs mt-1 ${isDark ? "text-gray-500" : "text-slate-600"}`}
                   >
                     {label}
                   </div>
@@ -288,7 +353,7 @@ export default function Home() {
             </motion.h2>
             <motion.p
               variants={fadeInUp}
-              className={`text-lg max-w-2xl mx-auto ${isDark ? "text-gray-400" : "text-light-subtext"}`}
+              className={`text-lg max-w-2xl mx-auto ${isDark ? "text-gray-400" : "text-slate-700"}`}
             >
               Your real scores become your real draw numbers, so your game on
               the course drives your shot at the prize pool.
@@ -346,7 +411,7 @@ export default function Home() {
                   {title}
                 </h3>
                 <p
-                  className={`text-sm leading-relaxed mb-4 ${isDark ? "text-gray-400" : "text-light-subtext"}`}
+                  className={`text-sm leading-relaxed mb-4 ${isDark ? "text-gray-400" : "text-slate-700"}`}
                 >
                   {desc}
                 </p>
@@ -372,7 +437,7 @@ export default function Home() {
 
       <section
         id="prizes"
-        className={`section-padding ${isDark ? "bg-dark-surface" : "bg-white"}`}
+        className={`section-padding ${isDark ? "bg-dark-surface" : "bg-slate-50/80"}`}
       >
         <div className="container-max">
           <motion.div
@@ -435,7 +500,7 @@ export default function Home() {
                   {tier.title}
                 </h3>
                 <p
-                  className={`text-sm mb-6 ${isDark ? "text-gray-500" : "text-light-subtext"}`}
+                  className={`text-sm mb-6 ${isDark ? "text-gray-500" : "text-slate-700"}`}
                 >
                   Match {tier.match} numbers
                 </p>
@@ -448,7 +513,7 @@ export default function Home() {
                     {tier.amount}
                   </span>
                   <span
-                    className={`text-xs block mt-1 ${isDark ? "text-gray-500" : "text-light-subtext"}`}
+                    className={`text-xs block mt-1 ${isDark ? "text-gray-500" : "text-slate-600"}`}
                   >
                     Illustrative monthly prize amount
                   </span>
@@ -485,7 +550,7 @@ export default function Home() {
             </motion.h2>
             <motion.p
               variants={fadeInUp}
-              className={`text-lg max-w-2xl mx-auto ${isDark ? "text-gray-400" : "text-light-subtext"}`}
+              className={`text-lg max-w-2xl mx-auto ${isDark ? "text-gray-400" : "text-slate-700"}`}
             >
               Admin spotlight selections now flow straight to the homepage, so
               featured causes and upcoming events stay current.
@@ -535,7 +600,7 @@ export default function Home() {
                     {charity.name}
                   </h3>
                   <p
-                    className={`text-sm leading-relaxed mb-4 ${isDark ? "text-gray-400" : "text-light-subtext"}`}
+                    className={`text-sm leading-relaxed mb-4 ${isDark ? "text-gray-400" : "text-slate-700"}`}
                   >
                     {charity.description}
                   </p>
@@ -554,7 +619,7 @@ export default function Home() {
                   </div>
                   <div className="flex items-center justify-between">
                     <span
-                      className={`text-xs ${isDark ? "text-gray-500" : "text-light-subtext"}`}
+                      className={`text-xs ${isDark ? "text-gray-500" : "text-slate-600"}`}
                     >
                       Total raised
                     </span>
@@ -571,7 +636,7 @@ export default function Home() {
 
           {spotlightCards.length === 0 && (
             <div
-              className={`mt-8 rounded-2xl border px-6 py-10 text-center text-sm ${isDark ? "border-dark-border bg-dark-card text-gray-400" : "border-light-border bg-white text-light-subtext shadow-sm"}`}
+              className={`mt-8 rounded-2xl border px-6 py-10 text-center text-sm ${isDark ? "border-dark-border bg-dark-card text-gray-400" : "border-slate-200 bg-white/90 text-slate-700 shadow-sm"}`}
             >
               Charity cards will appear here as soon as an admin adds charities
               and marks one as featured.
@@ -605,7 +670,7 @@ export default function Home() {
             ].map(({ icon: Icon, value, label }) => (
               <div
                 key={label}
-                className={`text-center p-6 rounded-2xl border ${isDark ? "bg-dark-card/50 border-dark-border" : "bg-white border-light-border shadow-sm"}`}
+                className={`text-center p-6 rounded-2xl border ${isDark ? "bg-dark-card/50 border-dark-border" : "bg-white/90 border-slate-200 shadow-sm"}`}
               >
                 <Icon size={24} className="text-brand-500 mx-auto mb-2" />
                 <div
@@ -614,7 +679,7 @@ export default function Home() {
                   {value}
                 </div>
                 <div
-                  className={`text-xs mt-1 ${isDark ? "text-gray-500" : "text-light-subtext"}`}
+                  className={`text-xs mt-1 ${isDark ? "text-gray-500" : "text-slate-600"}`}
                 >
                   {label}
                 </div>
@@ -625,7 +690,7 @@ export default function Home() {
       </section>
 
       <section
-        className={`section-padding ${isDark ? "bg-dark-surface" : "bg-white"}`}
+        className={`section-padding ${isDark ? "bg-dark-surface" : "bg-slate-50/70"}`}
       >
         <div className="container-max">
           <motion.div
@@ -648,12 +713,12 @@ export default function Home() {
             whileInView="visible"
             viewport={{ once: true }}
             variants={fadeInUp}
-            className={`max-w-2xl mx-auto rounded-2xl border p-8 ${isDark ? "bg-dark-card border-dark-border" : "bg-white border-light-border shadow-lg"}`}
+            className={`max-w-2xl mx-auto rounded-2xl border p-8 ${isDark ? "bg-dark-card border-dark-border" : "bg-white/95 border-slate-200 shadow-lg"}`}
           >
             <div className="space-y-6">
               <div>
                 <span
-                  className={`text-xs font-semibold uppercase tracking-wider ${isDark ? "text-gray-500" : "text-light-subtext"}`}
+                  className={`text-xs font-semibold uppercase tracking-wider ${isDark ? "text-gray-500" : "text-slate-600"}`}
                 >
                   Monthly Draw Numbers
                 </span>
@@ -683,7 +748,7 @@ export default function Home() {
 
               <div>
                 <span
-                  className={`text-xs font-semibold uppercase tracking-wider ${isDark ? "text-gray-500" : "text-light-subtext"}`}
+                  className={`text-xs font-semibold uppercase tracking-wider ${isDark ? "text-gray-500" : "text-slate-600"}`}
                 >
                   Your Scores
                 </span>
@@ -730,7 +795,7 @@ export default function Home() {
                           ? "border-brand-500 bg-brand-500/10 text-brand-500"
                           : isDark
                             ? "border-dark-border bg-dark-bg text-gray-500"
-                            : "border-light-border bg-light-bg text-light-subtext"
+                            : "border-slate-300 bg-slate-100 text-slate-700"
                       }`}
                     >
                       {score}
@@ -754,7 +819,7 @@ export default function Home() {
                     3-number match
                   </p>
                   <p
-                    className={`text-sm ${isDark ? "text-gray-400" : "text-light-subtext"}`}
+                    className={`text-sm ${isDark ? "text-gray-400" : "text-slate-700"}`}
                   >
                     You win a share of 25% of the prize pool.
                   </p>
@@ -786,7 +851,7 @@ export default function Home() {
             </motion.h2>
             <motion.p
               variants={fadeInUp}
-              className={`text-lg mb-10 ${isDark ? "text-gray-400" : "text-light-subtext"}`}
+              className={`text-lg mb-10 ${isDark ? "text-gray-400" : "text-slate-700"}`}
             >
               Join golfers who are turning their scores into prizes and their
               subscriptions into charitable impact.
@@ -806,7 +871,7 @@ export default function Home() {
                 />
               </Link>
               <span
-                className={`text-sm ${isDark ? "text-gray-500" : "text-light-subtext"}`}
+                className={`text-sm ${isDark ? "text-gray-500" : "text-slate-700"}`}
               >
                 Starting at {formatCurrencyINR(1500)}/month
               </span>

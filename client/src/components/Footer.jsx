@@ -25,7 +25,9 @@ export default function Footer() {
 
   return (
     <footer className={`border-t transition-colors duration-300 ${
-      isDark ? 'bg-dark-bg border-dark-border' : 'bg-light-bg border-light-border'
+      isDark
+        ? 'bg-dark-bg border-dark-border'
+        : 'bg-slate-100/90 border-slate-200'
     }`}>
       <div className="container-max px-4 sm:px-6 lg:px-8 py-16">
         <div className="grid grid-cols-2 md:grid-cols-4 gap-8 lg:gap-12">
@@ -33,13 +35,13 @@ export default function Footer() {
           <div className="col-span-2 md:col-span-1">
             <Link to="/" className="flex items-center gap-2 mb-4">
               <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-brand-400 to-brand-600 flex items-center justify-center">
-                <span className="text-white font-bold">G</span>
+                <span className="text-white font-bold">S</span>
               </div>
               <span className={`text-lg font-bold ${isDark ? 'text-white' : 'text-light-text'}`}>
-                Golf<span className="gradient-text">Charity</span>
+                Swing<span className="gradient-text">Save</span>
               </span>
             </Link>
-            <p className={`text-sm leading-relaxed ${isDark ? 'text-gray-500' : 'text-light-subtext'}`}>
+            <p className={`text-sm leading-relaxed ${isDark ? 'text-gray-500' : 'text-slate-700'}`}>
               Play golf, win prizes, and make a difference. Every subscription supports a charity you believe in.
             </p>
           </div>
@@ -57,7 +59,7 @@ export default function Footer() {
                       <Link
                         to={link.href}
                         className={`text-sm transition-colors ${
-                          isDark ? 'text-gray-500 hover:text-brand-400' : 'text-light-subtext hover:text-brand-600'
+                          isDark ? 'text-gray-500 hover:text-brand-400' : 'text-slate-700 hover:text-brand-700'
                         }`}
                       >
                         {link.name}
@@ -66,7 +68,7 @@ export default function Footer() {
                       <a
                         href={link.href}
                         className={`text-sm transition-colors ${
-                          isDark ? 'text-gray-500 hover:text-brand-400' : 'text-light-subtext hover:text-brand-600'
+                          isDark ? 'text-gray-500 hover:text-brand-400' : 'text-slate-700 hover:text-brand-700'
                         }`}
                       >
                         {link.name}
@@ -83,10 +85,10 @@ export default function Footer() {
         <div className={`mt-12 pt-8 border-t flex flex-col sm:flex-row items-center justify-between gap-4 ${
           isDark ? 'border-dark-border' : 'border-light-border'
         }`}>
-          <p className={`text-sm ${isDark ? 'text-gray-600' : 'text-light-subtext'}`}>
-            © 2026 GolfCharity. All rights reserved.
+          <p className={`text-sm ${isDark ? 'text-gray-600' : 'text-slate-700'}`}>
+            © 2026 SwingSave. All rights reserved.
           </p>
-          <p className={`text-sm flex items-center gap-1 ${isDark ? 'text-gray-600' : 'text-light-subtext'}`}>
+          <p className={`text-sm flex items-center gap-1 ${isDark ? 'text-gray-600' : 'text-slate-700'}`}>
             Made with <Heart size={14} className="text-brand-500 fill-brand-500" /> for golfers who give back
           </p>
         </div>
