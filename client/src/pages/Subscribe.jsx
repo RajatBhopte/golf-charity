@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import Navbar from "../components/Navbar";
 import api from "../utils/api";
@@ -47,13 +47,16 @@ const formatInr = (value) =>
     maximumFractionDigits: 0,
   }).format(value);
 
-const loadRazorpayScript = () =>
-  new Promise((resolve) => {
-    if (window.Razorpay) {
-      resolve(true);
-      return;
-    }
+const loadRazorpayScript = () => {
+  if (window.Razorpay) {
+    return Promise.resolve(true);
+  }
 
+  if (window.__razorpayLoadingPromise) {
+    return window.__razorpayLoadingPromise;
+  }
+
+  window.__razorpayLoadingPromise = new Promise((resolve) => {
     const script = document.createElement("script");
     script.src = "https://checkout.razorpay.com/v1/checkout.js";
     script.async = true;
@@ -61,6 +64,9 @@ const loadRazorpayScript = () =>
     script.onerror = () => resolve(false);
     document.body.appendChild(script);
   });
+
+  return window.__razorpayLoadingPromise;
+};
 
 export default function Subscribe() {
   const navigate = useNavigate();
@@ -70,6 +76,7 @@ export default function Subscribe() {
   const [selectedPlan, setSelectedPlan] = useState("monthly");
   const [isProcessing, setIsProcessing] = useState(false);
   const [error, setError] = useState("");
+  const [isSdkReady, setIsSdkReady] = useState(false);
 
   const selectedPlanDetails = useMemo(
     () =>
@@ -77,6 +84,20 @@ export default function Subscribe() {
       PLAN_OPTIONS[0],
     [selectedPlan],
   );
+
+  useEffect(() => {
+    let mounted = true;
+
+    loadRazorpayScript().then((isLoaded) => {
+      if (mounted && isLoaded) {
+        setIsSdkReady(true);
+      }
+    });
+
+    return () => {
+      mounted = false;
+    };
+  }, []);
 
   const handleCheckout = async () => {
     if (selectedPlan === "pay_later") {
@@ -88,14 +109,16 @@ export default function Subscribe() {
     setIsProcessing(true);
 
     try {
-      const sdkLoaded = await loadRazorpayScript();
+      const [sdkLoaded, orderResponse] = await Promise.all([
+        loadRazorpayScript(),
+        api.post("/payments/razorpay/order", {
+          plan: selectedPlan,
+        }),
+      ]);
+
       if (!sdkLoaded || !window.Razorpay) {
         throw new Error("Unable to load Razorpay checkout. Please try again.");
       }
-
-      const orderResponse = await api.post("/payments/razorpay/order", {
-        plan: selectedPlan,
-      });
 
       const orderData = orderResponse.data;
 
@@ -265,11 +288,16 @@ export default function Subscribe() {
               className="btn-primary w-full py-5 text-xl disabled:cursor-not-allowed disabled:opacity-60"
             >
               {isProcessing
-                ? "Processing..."
+                ? "Opening checkout..."
                 : selectedPlan === "pay_later"
                   ? "Continue with Limited Access"
                   : `Pay ${formatInr(selectedPlanDetails.amountInr)} with Razorpay ->`}
             </button>
+            {!isSdkReady && selectedPlan !== "pay_later" && (
+              <p className="text-center text-xs text-gray-500">
+                Preparing secure checkout...
+              </p>
+            )}
             {selectedPlan !== "pay_later" && (
               <button
                 type="button"

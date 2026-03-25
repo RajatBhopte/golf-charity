@@ -9,7 +9,9 @@ export const AuthRoute = () => {
   const { session, loading } = useAuth();
   const location = useLocation();
 
-  if (loading) return null; // or a nice spinner
+  // Only block while auth state is unknown. If a session exists,
+  // allow route access even when profile hydration is still in progress.
+  if (loading && !session) return null;
 
   if (!session) {
     // Redirect them to the /login page, but save the current location they were

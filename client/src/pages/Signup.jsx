@@ -221,7 +221,7 @@ export default function Signup() {
           charity_id: formData.charityId,
           charity_percentage: Number(formData.charityPercentage),
         });
-        await refreshUserData?.();
+        refreshUserData?.();
       } else {
         await api.post("/auth/register", {
           email: formData.email,
@@ -241,7 +241,17 @@ export default function Signup() {
 
       navigate("/subscribe", { replace: true });
     } catch (err) {
-      setError(err.message || "An error occurred during signup");
+      const statusCode = err?.response?.status;
+      const apiError = err?.response?.data?.error;
+
+      if (statusCode === 409) {
+        setError(
+          apiError ||
+            "This email is already registered. Please log in or reset your password.",
+        );
+      } else {
+        setError(apiError || err.message || "An error occurred during signup");
+      }
     } finally {
       setIsLoading(false);
     }
@@ -279,7 +289,7 @@ export default function Signup() {
         )}
 
         <div className="w-full max-w-lg p-6 sm:p-7 rounded-3xl glass-card relative overflow-hidden">
-          <AnimatePresence mode="wait">
+          <AnimatePresence mode="sync">
             {error && (
               <motion.div
                 initial={{ opacity: 0, y: -10 }}
@@ -556,8 +566,8 @@ export default function Signup() {
                       disabled={charitiesLoading || !filteredCharities.length}
                       className={`shrink-0 px-3 py-2 rounded-xl text-xs font-semibold border transition-colors ${
                         isDark
-                          ? "border-dark-border text-gray-200 hover:bg-dark-surface"
-                          : "border-light-border text-light-text hover:bg-gray-100"
+                          ? "border-dark-border text-gray-200"
+                          : "border-light-border text-light-text"
                       } ${charitiesLoading || !filteredCharities.length ? "opacity-60 cursor-not-allowed" : ""}`}
                     >
                       View all
@@ -570,8 +580,8 @@ export default function Signup() {
                       onClick={() => scrollCharityRow("left")}
                       className={`p-1.5 rounded-lg border transition-colors ${
                         isDark
-                          ? "border-dark-border text-gray-300 hover:bg-dark-surface"
-                          : "border-light-border text-light-subtext hover:bg-gray-100"
+                          ? "border-dark-border text-gray-300"
+                          : "border-light-border text-light-subtext"
                       }`}
                       aria-label="Scroll charities left"
                     >
@@ -582,8 +592,8 @@ export default function Signup() {
                       onClick={() => scrollCharityRow("right")}
                       className={`p-1.5 rounded-lg border transition-colors ${
                         isDark
-                          ? "border-dark-border text-gray-300 hover:bg-dark-surface"
-                          : "border-light-border text-light-subtext hover:bg-gray-100"
+                          ? "border-dark-border text-gray-300"
+                          : "border-light-border text-light-subtext"
                       }`}
                       aria-label="Scroll charities right"
                     >
@@ -608,12 +618,12 @@ export default function Signup() {
                         <div
                           key={charity.id}
                           onClick={() => handleSelectCharity(charity.id)}
-                          className={`relative min-w-[200px] sm:min-w-[220px] flex-shrink-0 snap-start flex flex-col items-center text-center gap-2 p-3 rounded-2xl border-2 cursor-pointer transition-all duration-300 hover:-translate-y-0.5 hover:scale-[1.01] ${
+                          className={`relative min-w-[200px] sm:min-w-[220px] flex-shrink-0 snap-start flex flex-col items-center text-center gap-2 p-3 rounded-2xl border-2 cursor-pointer transition-all duration-300 ${
                             formData.charityId === charity.id
                               ? `border-green-500 ${isDark ? "bg-green-500/10 shadow-[0_0_25px_rgba(34,197,94,0.22)]" : "bg-green-50/70 shadow-[0_0_20px_rgba(34,197,94,0.18)]"}`
                               : isDark
-                                ? "border-dark-border bg-dark-surface hover:border-green-500/40 hover:shadow-[0_0_16px_rgba(16,185,129,0.15)]"
-                                : "border-gray-200 bg-white hover:border-green-400/60 hover:shadow-[0_12px_24px_rgba(16,185,129,0.1)]"
+                                ? "border-dark-border bg-dark-surface"
+                                : "border-gray-200 bg-white"
                           }`}
                         >
                           {formData.charityId === charity.id && (
@@ -774,8 +784,8 @@ export default function Signup() {
                                 formData.charityId === charity.id
                                   ? `border-green-500 ${isDark ? "bg-green-500/10" : "bg-green-50/60"}`
                                   : isDark
-                                    ? "border-dark-border bg-dark-surface hover:border-green-500/40"
-                                    : "border-gray-200 bg-white hover:border-green-400/60"
+                                    ? "border-dark-border bg-dark-surface"
+                                    : "border-gray-200 bg-white"
                               }`}
                             >
                               {formData.charityId === charity.id && (

@@ -91,6 +91,56 @@
   .text-balance {
     text-wrap: balance;
   }
+
+  .charity-marquee-track {
+    display: flex;
+    width: max-content;
+    animation: charity-marquee var(--charity-marquee-duration, 20s) linear
+      infinite;
+    will-change: transform;
+  }
+
+  .charity-marquee-track:hover {
+    animation-play-state: paused;
+  }
+
+  .charity-marquee-group {
+    display: flex;
+    gap: 1.5rem;
+    padding-right: 1.5rem;
+  }
+
+  .charity-marquee-card {
+    width: min(24rem, calc(100vw - 2.5rem));
+    flex-shrink: 0;
+  }
+
+  @media (min-width: 768px) {
+    .charity-marquee-card {
+      width: min(26rem, calc(100vw - 6rem));
+    }
+  }
+
+  .hide-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+
+  .hide-scrollbar::-webkit-scrollbar,
+  .dark .hide-scrollbar::-webkit-scrollbar {
+    width: 0 !important;
+    height: 0 !important;
+    display: none !important;
+  }
+}
+
+@keyframes charity-marquee {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-50%);
+  }
 }
 
 /* Custom scrollbar */

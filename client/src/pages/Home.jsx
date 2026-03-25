@@ -128,7 +128,7 @@ export default function Home() {
         ]
       : charities;
 
-    return ordered.slice(0, 3);
+    return ordered;
   }, [charities, featuredCharity]);
 
   const totalRaised = charities.reduce(
@@ -303,7 +303,7 @@ export default function Home() {
               className={`mt-16 grid grid-cols-3 gap-6 max-w-lg mx-auto py-6 px-8 rounded-2xl border ${
                 isDark
                   ? "bg-dark-card/50 border-dark-border"
-                    : "bg-white/90 border-slate-200 shadow-md"
+                  : "bg-white/90 border-slate-200 shadow-md"
               }`}
             >
               {[
@@ -562,76 +562,99 @@ export default function Home() {
             whileInView="visible"
             viewport={{ once: true, margin: "-80px" }}
             variants={stagger}
-            className="grid md:grid-cols-3 gap-6 lg:gap-8"
+            className="relative overflow-hidden"
           >
-            {spotlightCards.map((charity, index) => (
-              <motion.div
-                key={charity.id}
-                variants={fadeInUp}
-                className={`glass-card overflow-hidden group ${charity.is_spotlight ? (isDark ? "ring-1 ring-brand-500/30" : "ring-2 ring-brand-500/20") : ""}`}
-              >
+            <div
+              className="charity-marquee-track"
+              style={{
+                "--charity-marquee-duration": `${Math.max(
+                  18,
+                  spotlightCards.length * 6,
+                )}s`,
+              }}
+            >
+              {[0, 1].map((cloneIndex) => (
                 <div
-                  className={`h-44 relative overflow-hidden ${charity.image_url ? "" : "bg-gradient-to-br from-brand-500 to-brand-700"} flex items-center justify-center`}
+                  key={`group-${cloneIndex}`}
+                  className="charity-marquee-group"
+                  aria-hidden={cloneIndex === 1}
                 >
-                  {charity.image_url ? (
-                    <img
-                      src={charity.image_url}
-                      alt={charity.name}
-                      className="absolute inset-0 h-full w-full object-cover"
-                    />
-                  ) : (
-                    <Heart size={56} className="relative z-10 text-white" />
-                  )}
-                  <div className="absolute inset-0 bg-black/20" />
-                  {charity.is_spotlight && (
-                    <div className="absolute top-3 right-3">
-                      <span className="px-3 py-1 rounded-full text-xs font-bold bg-brand-500 text-white">
-                        <Star size={10} className="inline mr-1 -mt-0.5" />
-                        Featured
-                      </span>
-                    </div>
-                  )}
-                </div>
+                  {spotlightCards.map((charity, index) => (
+                    <div
+                      key={`${charity.id}-${cloneIndex}`}
+                      className={`charity-marquee-card glass-card overflow-hidden group ${charity.is_spotlight ? (isDark ? "ring-1 ring-brand-500/30" : "ring-2 ring-brand-500/20") : ""}`}
+                    >
+                      <div
+                        className={`h-44 relative overflow-hidden ${charity.image_url ? "" : "bg-gradient-to-br from-brand-500 to-brand-700"} flex items-center justify-center`}
+                      >
+                        {charity.image_url ? (
+                          <img
+                            src={charity.image_url}
+                            alt={charity.name}
+                            className="absolute inset-0 h-full w-full object-cover"
+                          />
+                        ) : (
+                          <Heart
+                            size={56}
+                            className="relative z-10 text-white"
+                          />
+                        )}
+                        <div className="absolute inset-0 bg-black/20" />
+                        {charity.is_spotlight && (
+                          <div className="absolute top-3 right-3">
+                            <span className="px-3 py-1 rounded-full text-xs font-bold bg-brand-500 text-white">
+                              <Star size={10} className="inline mr-1 -mt-0.5" />
+                              Featured
+                            </span>
+                          </div>
+                        )}
+                      </div>
 
-                <div className="p-6">
-                  <h3
-                    className={`text-lg font-bold mb-2 ${isDark ? "text-white" : "text-light-text"}`}
-                  >
-                    {charity.name}
-                  </h3>
-                  <p
-                    className={`text-sm leading-relaxed mb-4 ${isDark ? "text-gray-400" : "text-slate-700"}`}
-                  >
-                    {charity.description}
-                  </p>
-                  <div
-                    className={`flex items-center gap-2 p-3 rounded-xl mb-4 ${isDark ? "bg-dark-bg/50" : "bg-light-bg"}`}
-                  >
-                    <Calendar size={16} className="text-brand-500 shrink-0" />
-                    <span
-                      className={`text-xs font-medium ${isDark ? "text-gray-300" : "text-light-text"}`}
-                    >
-                      {Array.isArray(charity.upcoming_events) &&
-                      charity.upcoming_events[0]
-                        ? charity.upcoming_events[0]
-                        : `Community update #${index + 1} coming soon`}
-                    </span>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span
-                      className={`text-xs ${isDark ? "text-gray-500" : "text-slate-600"}`}
-                    >
-                      Total raised
-                    </span>
-                    <span
-                      className={`text-sm font-bold ${isDark ? "text-brand-400" : "text-brand-600"}`}
-                    >
-                      {formatCurrencyINR(charity.total_raised || 0)}
-                    </span>
-                  </div>
+                      <div className="p-6">
+                        <h3
+                          className={`text-lg font-bold mb-2 ${isDark ? "text-white" : "text-light-text"}`}
+                        >
+                          {charity.name}
+                        </h3>
+                        <p
+                          className={`text-sm leading-relaxed mb-4 ${isDark ? "text-gray-400" : "text-slate-700"}`}
+                        >
+                          {charity.description}
+                        </p>
+                        <div
+                          className={`flex items-center gap-2 p-3 rounded-xl mb-4 ${isDark ? "bg-dark-bg/50" : "bg-light-bg"}`}
+                        >
+                          <Calendar
+                            size={16}
+                            className="text-brand-500 shrink-0"
+                          />
+                          <span
+                            className={`text-xs font-medium ${isDark ? "text-gray-300" : "text-light-text"}`}
+                          >
+                            {Array.isArray(charity.upcoming_events) &&
+                            charity.upcoming_events[0]
+                              ? charity.upcoming_events[0]
+                              : `Community update #${index + 1} coming soon`}
+                          </span>
+                        </div>
+                        <div className="flex items-center justify-between">
+                          <span
+                            className={`text-xs ${isDark ? "text-gray-500" : "text-slate-600"}`}
+                          >
+                            Total raised
+                          </span>
+                          <span
+                            className={`text-sm font-bold ${isDark ? "text-brand-400" : "text-brand-600"}`}
+                          >
+                            {formatCurrencyINR(charity.total_raised || 0)}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
                 </div>
-              </motion.div>
-            ))}
+              ))}
+            </div>
           </motion.div>
 
           {spotlightCards.length === 0 && (
