@@ -409,7 +409,8 @@ export default function Signup() {
                   </p>
                 </div>
 
-                <div className="space-y-3 mb-6">
+                <div className={`mb-6 rounded-3xl border p-4 sm:p-5 ${isDark ? 'border-brand-500/30 bg-[#0d1937]' : 'border-brand-200 bg-brand-50/40'}`}>
+                  <div className="space-y-4">
                   {charitiesLoading && (
                     <div className={`rounded-xl border px-4 py-5 text-sm ${isDark ? 'border-dark-border bg-dark-surface text-gray-400' : 'border-light-border bg-gray-50 text-gray-500'}`}>
                       Loading charities...
@@ -420,26 +421,29 @@ export default function Signup() {
                     <div
                       key={charity.id}
                       onClick={() => setFormData((current) => ({ ...current, charityId: charity.id }))}
-                      className={`flex items-center gap-4 p-4 rounded-xl border-2 cursor-pointer transition-all duration-200 ${
+                      className={`relative flex items-center gap-4 p-5 rounded-2xl border-2 cursor-pointer transition-all duration-300 hover:-translate-y-0.5 hover:scale-[1.01] ${
                         formData.charityId === charity.id
-                          ? `border-brand-500 ${isDark ? 'bg-brand-500/10' : 'bg-brand-50'}`
-                          : isDark ? 'border-dark-border bg-dark-surface hover:border-gray-600' : 'border-gray-200 bg-white hover:border-gray-300'
+                          ? `border-green-500 ${isDark ? 'bg-green-500/10 shadow-[0_0_25px_rgba(34,197,94,0.22)]' : 'bg-green-50/70 shadow-[0_0_20px_rgba(34,197,94,0.18)]'}`
+                          : isDark ? 'border-dark-border bg-dark-surface hover:border-green-500/40 hover:shadow-[0_0_16px_rgba(16,185,129,0.15)]' : 'border-gray-200 bg-white hover:border-green-400/60 hover:shadow-[0_12px_24px_rgba(16,185,129,0.1)]'
                       }`}
                     >
-                      <div className={`w-12 h-12 rounded-xl overflow-hidden flex items-center justify-center border ${isDark ? 'border-dark-border bg-dark-bg' : 'border-light-border bg-gray-50'}`}>
+                      {formData.charityId === charity.id && (
+                        <div className="absolute right-4 top-4">
+                          <CheckCircle size={18} className="text-green-500" />
+                        </div>
+                      )}
+
+                      <div className={`w-12 h-12 rounded-xl overflow-hidden flex items-center justify-center border shrink-0 ${isDark ? 'border-dark-border bg-dark-bg' : 'border-light-border bg-gray-50'}`}>
                         {charity.logo_url ? (
                           <img src={charity.logo_url} alt={charity.name} className="w-8 h-8 object-contain" />
                         ) : (
-                          <Heart size={20} className="text-brand-500" />
+                          <Heart size={18} className="text-brand-500" />
                         )}
                       </div>
-                      <div>
-                        <h4 className={`font-bold text-sm ${isDark ? 'text-white' : 'text-light-text'}`}>{charity.name}</h4>
-                        <p className={`text-xs mt-0.5 ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>{charity.description}</p>
-                        {Array.isArray(charity.upcoming_events) && charity.upcoming_events[0] && (
-                          <p className="mt-1 text-[11px] font-semibold text-brand-500">{charity.upcoming_events[0]}</p>
-                        )}
-                      </div>
+
+                      <h4 className={`font-extrabold text-2xl leading-tight tracking-tight ${isDark ? 'text-white' : 'text-light-text'}`}>
+                        {charity.name}
+                      </h4>
                     </div>
                   ))}
 
@@ -448,6 +452,7 @@ export default function Signup() {
                       No charities are available yet. Ask an admin to add one before signing up.
                     </div>
                   )}
+                  </div>
                 </div>
 
                 <div className="mb-8">
