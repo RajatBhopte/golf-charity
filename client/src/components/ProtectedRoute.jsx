@@ -1,5 +1,5 @@
-import { Navigate, Outlet, useLocation } from 'react-router-dom';
-import { useAuth } from '../context/AuthContext';
+import { Navigate, Outlet, useLocation } from "react-router-dom";
+import { useAuth } from "../context/AuthContext";
 
 /**
  * AuthRoute: Protects routes that require a logged-in user.
@@ -36,7 +36,7 @@ export const SubRoute = () => {
     return <Navigate to="/login" state={{ from: location }} replace />;
   }
 
-  if (user?.subscription_status !== 'active') {
+  if (user?.subscription_status !== "active") {
     return <Navigate to="/subscribe" state={{ from: location }} replace />;
   }
 
@@ -57,11 +57,10 @@ export const AdminRoute = () => {
     return <Navigate to="/admin/login" state={{ from: location }} replace />;
   }
 
-  if (user?.role !== 'admin') {
+  if (user?.role !== "admin") {
     // If they aren't an admin, send them back to the user dashboard
     return <Navigate to="/dashboard" replace />;
   }
-
 
   return <Outlet />;
 };
