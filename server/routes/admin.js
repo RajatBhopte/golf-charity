@@ -11,11 +11,46 @@ const VALID_PAYMENT_STATUSES = ['pending', 'paid'];
 const DEFAULT_POOL_SPLIT = { tier_5: 0.4, tier_4: 0.35, tier_3: 0.25 };
 const SUBSCRIPTION_FEE_INR = 1500;
 const PRIZE_POOL_SHARE = 0.2;
+const SCORES_PER_DRAW = 5;
+const DRAW_NUMBER_MIN = 1;
+const DRAW_NUMBER_MAX = 45;
+const DRAW_TIERS = [5, 4, 3];
 
 const isMissingSubscriptionPlanColumn = (error) => {
   const message = String(error?.message || '').toLowerCase();
   return message.includes('subscription_plan') && message.includes('does not exist');
 };
+
+const isMissingCharityColumnError = (error) => {
+  const message = String(error?.message || '').toLowerCase();
+  return (message.includes('charities') || message.includes("'charity'")) && message.includes('column');
+};
+
+const isMissingJackpotRolloverColumn = (error) => {
+  const message = String(error?.message || '').toLowerCase();
+  return (message.includes('jackpot_rollover') && message.includes('does not exist')) || message.includes("'jackpot_rollover' column of 'draws'");
+};
+
+const getMissingCharityColumnName = (error) => {
+  const message = String(error?.message || '');
+  const singleQuoteMatch = message.match(/'([^']+)' column of 'charities'/i);
+  if (singleQuoteMatch) {
+    return singleQuoteMatch[1];
+  }
+
+  const doubleQuoteMatch = message.match(/column ["`]?([a-zA-Z0-9_]+)["`]?/i);
+  return doubleQuoteMatch?.[1] || null;
+};
+
+const normalizeCharityRecord = (charity) => ({
+  ...charity,
+  logo_url: charity?.logo_url || null,
+  image_url: charity?.image_url || null,
+  description: charity?.description || '',
+  upcoming_events: Array.isArray(charity?.upcoming_events) ? charity.upcoming_events : [],
+  is_spotlight: Boolean(charity?.is_spotlight),
+  total_raised: parseNumber(charity?.total_raised, 0),
+});
 
 const withDefaultSubscriptionPlans = (records) => (records || []).map((record) => ({
   ...record,
@@ -25,6 +60,14 @@ const withDefaultSubscriptionPlans = (records) => (records || []).map((record) =
 const removeSubscriptionPlan = (payload = {}) => {
   const nextPayload = { ...payload };
   delete nextPayload.subscription_plan;
+  return nextPayload;
+};
+
+const removeCharityColumns = (payload = {}, columns = []) => {
+  const nextPayload = { ...payload };
+  for (const column of columns) {
+    delete nextPayload[column];
+  }
   return nextPayload;
 };
 
@@ -166,32 +209,270 @@ const weightedPick = (candidates) => {
   return candidates[candidates.length - 1] || null;
 };
 
-const pickUniqueWinners = (candidates) => {
-  const tiers = ['tier_5', 'tier_4', 'tier_3'];
-  const winners = {};
-  const available = [...candidates];
+const sortNumbersAscending = (numbers = []) => [...numbers].sort((left, right) => left - right);
 
-  for (const tier of tiers) {
+const formatNumberSeries = (numbers = []) => numbers.join(', ');
+
+const normalizeWinningNumbers = (numbers = []) => {
+  const normalized = [...new Set((numbers || []).map((value) => parseInt(value, 10)).filter((value) => (
+    Number.isInteger(value) && value >= DRAW_NUMBER_MIN && value <= DRAW_NUMBER_MAX
+  )))];
+
+  if (normalized.length !== SCORES_PER_DRAW) {
+    throw new Error(`Winning numbers must contain ${SCORES_PER_DRAW} unique values between ${DRAW_NUMBER_MIN} and ${DRAW_NUMBER_MAX}`);
+  }
+
+  return sortNumbersAscending(normalized);
+};
+
+const buildRandomWinningNumbers = (excludedNumbers = []) => {
+  const excluded = new Set(excludedNumbers);
+  const selected = new Set(excludedNumbers);
+
+  while (selected.size < SCORES_PER_DRAW + excludedNumbers.length) {
+    selected.add(Math.floor(Math.random() * DRAW_NUMBER_MAX) + DRAW_NUMBER_MIN);
+  }
+
+  return sortNumbersAscending([...selected].filter((number) => !excluded.has(number)).slice(0, SCORES_PER_DRAW));
+};
+
+const pickWeightedUniqueNumbers = (candidates) => {
+  const selected = [];
+  const available = candidates
+    .filter((candidate) => candidate.weight > 0)
+    .map((candidate) => ({ ...candidate }));
+
+  while (selected.length < SCORES_PER_DRAW && available.length > 0) {
     const winner = weightedPick(available);
-    winners[tier] = winner
-      ? {
-          id: winner.id,
-          full_name: winner.full_name,
-          email: winner.email,
-          score_count: winner.score_count,
-          weight: winner.weight,
-        }
-      : null;
+    if (!winner) {
+      break;
+    }
 
-    if (winner) {
-      const winnerIndex = available.findIndex((candidate) => candidate.id === winner.id);
-      if (winnerIndex >= 0) {
-        available.splice(winnerIndex, 1);
-      }
+    selected.push(winner.number);
+    const winnerIndex = available.findIndex((candidate) => candidate.number === winner.number);
+    if (winnerIndex >= 0) {
+      available.splice(winnerIndex, 1);
     }
   }
 
-  return winners;
+  if (selected.length < SCORES_PER_DRAW) {
+    const filler = buildRandomWinningNumbers(selected);
+    selected.push(...filler.slice(0, SCORES_PER_DRAW - selected.length));
+  }
+
+  return sortNumbersAscending(selected);
+};
+
+const buildWinningNumbers = ({ type, weighting, scoreFrequency, winningNumbers }) => {
+  if (Array.isArray(winningNumbers) && winningNumbers.length) {
+    return normalizeWinningNumbers(winningNumbers);
+  }
+
+  if (type !== 'algorithmic') {
+    return buildRandomWinningNumbers();
+  }
+
+  const weightedCandidates = Object.entries(scoreFrequency || {}).map(([score, frequency]) => ({
+    number: parseInt(score, 10),
+    weight: weighting === 'least' ? 1 / Math.max(frequency, 1) : Math.max(frequency, 1),
+  }));
+
+  return pickWeightedUniqueNumbers(weightedCandidates);
+};
+
+const getTierKey = (tier) => `tier_${tier}`;
+
+const getMatchNumbers = (submittedScores = [], winningNumbers = []) => {
+  const submitted = new Set((submittedScores || []).map((score) => parseInt(score, 10)));
+  return winningNumbers.filter((number) => submitted.has(number));
+};
+
+const buildPrizeBreakdown = ({ totalPool, poolSplit, incomingJackpotRollover, tierWinners }) => {
+  return DRAW_TIERS.reduce((result, tier) => {
+    const tierKey = getTierKey(tier);
+    const basePoolAmount = parseFloat((totalPool * parseNumber(poolSplit[tierKey], 0)).toFixed(2));
+    const totalTierPool = parseFloat((basePoolAmount + (tier === 5 ? incomingJackpotRollover : 0)).toFixed(2));
+    const winners = tierWinners[tierKey] || [];
+    const winnerCount = winners.length;
+    const perWinnerAmount = winnerCount > 0
+      ? parseFloat((totalTierPool / winnerCount).toFixed(2))
+      : 0;
+    const rolloverAmount = tier === 5 && winnerCount === 0 ? totalTierPool : 0;
+
+    result[tierKey] = {
+      tier,
+      tier_key: tierKey,
+      winner_count: winnerCount,
+      base_pool_amount: basePoolAmount,
+      total_pool_amount: totalTierPool,
+      per_winner_amount: perWinnerAmount,
+      rollover_amount: rolloverAmount,
+      winners,
+    };
+    return result;
+  }, {});
+};
+
+const fetchIncomingJackpotRollover = async (monthYear) => {
+  try {
+    const { data, error } = await supabase
+      .from('draws')
+      .select('jackpot_rollover')
+      .eq('status', 'published')
+      .lt('month_year', monthYear)
+      .order('month_year', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (error) {
+      if (isMissingJackpotRolloverColumn(error)) {
+        return 0;
+      }
+      throw error;
+    }
+
+    return parseNumber(data?.jackpot_rollover, 0);
+  } catch (err) {
+    if (isMissingJackpotRolloverColumn(err)) {
+      return 0;
+    }
+    throw err;
+  }
+};
+
+const buildParticipantEntries = ({ participants, scores, monthEnd }) => {
+  const scoresByUser = {};
+
+  for (const scoreEntry of scores || []) {
+    const playedDate = new Date(scoreEntry.played_date);
+    if (Number.isNaN(playedDate.getTime()) || playedDate >= monthEnd) {
+      continue;
+    }
+
+    scoresByUser[scoreEntry.user_id] = scoresByUser[scoreEntry.user_id] || [];
+    scoresByUser[scoreEntry.user_id].push(scoreEntry);
+  }
+
+  return (participants || []).map((participant) => {
+    const latestScores = (scoresByUser[participant.id] || [])
+      .sort((left, right) => {
+        const playedDateDiff = new Date(right.played_date) - new Date(left.played_date);
+        if (playedDateDiff !== 0) {
+          return playedDateDiff;
+        }
+        return new Date(right.created_at || 0) - new Date(left.created_at || 0);
+      })
+      .slice(0, SCORES_PER_DRAW)
+      .map((entry) => parseInt(entry.score, 10))
+      .filter((score) => Number.isInteger(score));
+
+    return {
+      ...participant,
+      submitted_scores: sortNumbersAscending(latestScores),
+      score_count: latestScores.length,
+    };
+  }).filter((participant) => participant.score_count >= SCORES_PER_DRAW);
+};
+
+const simulateDrawOutcome = async ({ monthYearInput, type = 'algorithmic', weighting = 'most', winningNumbers = null }) => {
+  const { end, monthYear, label } = getMonthRange(monthYearInput);
+
+  let [{ data: participants, error: userError }, { data: scores, error: scoreError }] = await Promise.all([
+    supabase
+      .from('users')
+      .select('id, full_name, email, subscription_status, subscription_plan')
+      .eq('subscription_status', 'active'),
+    supabase
+      .from('scores')
+      .select('user_id, score, played_date, created_at')
+      .lt('played_date', formatDateOnly(end)),
+  ]);
+
+  if (userError && isMissingSubscriptionPlanColumn(userError)) {
+    const fallbackUsersResult = await supabase
+      .from('users')
+      .select('id, full_name, email, subscription_status')
+      .eq('subscription_status', 'active');
+
+    participants = withDefaultSubscriptionPlans(fallbackUsersResult.data);
+    userError = fallbackUsersResult.error;
+  }
+
+  if (userError) throw userError;
+  if (scoreError) throw scoreError;
+
+  const eligibleParticipants = buildParticipantEntries({
+    participants,
+    scores,
+    monthEnd: end,
+  });
+
+  const scoreFrequency = {};
+  for (const participant of eligibleParticipants) {
+    for (const score of participant.submitted_scores) {
+      scoreFrequency[score] = (scoreFrequency[score] || 0) + 1;
+    }
+  }
+
+  const resolvedWinningNumbers = buildWinningNumbers({
+    type,
+    weighting,
+    scoreFrequency,
+    winningNumbers,
+  });
+
+  const tierWinners = {
+    tier_5: [],
+    tier_4: [],
+    tier_3: [],
+  };
+
+  for (const participant of eligibleParticipants) {
+    const matchedNumbers = getMatchNumbers(participant.submitted_scores, resolvedWinningNumbers);
+    const matchCount = matchedNumbers.length;
+
+    if (!DRAW_TIERS.includes(matchCount)) {
+      continue;
+    }
+
+    tierWinners[getTierKey(matchCount)].push({
+      id: participant.id,
+      full_name: participant.full_name,
+      email: participant.email,
+      submitted_scores: participant.submitted_scores,
+      matched_numbers: matchedNumbers,
+      match_count: matchCount,
+    });
+  }
+
+  const totalPool = parseFloat(((participants || []).reduce(
+    (sum, participant) => sum + (getMonthlyPlanValue(participant.subscription_plan) * PRIZE_POOL_SHARE),
+    0
+  )).toFixed(2));
+  const incomingJackpotRollover = await fetchIncomingJackpotRollover(monthYear);
+  const prizeBreakdown = buildPrizeBreakdown({
+    totalPool,
+    poolSplit: DEFAULT_POOL_SPLIT,
+    incomingJackpotRollover,
+    tierWinners,
+  });
+  const winnerCount = Object.values(prizeBreakdown).reduce((sum, tier) => sum + tier.winner_count, 0);
+
+  return {
+    total_participants: participants?.length || 0,
+    eligible_participants: eligibleParticipants.length,
+    total_pool: totalPool,
+    pool_split: DEFAULT_POOL_SPLIT,
+    winning_numbers: resolvedWinningNumbers,
+    incoming_jackpot_rollover: incomingJackpotRollover,
+    outgoing_jackpot_rollover: prizeBreakdown.tier_5?.rollover_amount || 0,
+    prize_breakdown: prizeBreakdown,
+    winner_count: winnerCount,
+    is_simulation: true,
+    month_year: monthYear,
+    month_label: label,
+    settings: { type, weighting },
+  };
 };
 
 const clearOtherSpotlights = async (charityId) => {
@@ -204,6 +485,38 @@ const clearOtherSpotlights = async (charityId) => {
   if (error) {
     throw error;
   }
+};
+
+const ensureBucket = async (bucketName, options = {}) => {
+  const { data: existingBucket, error: getBucketError } = await supabase
+    .storage
+    .getBucket(bucketName);
+
+  if (!getBucketError && existingBucket) {
+    return existingBucket;
+  }
+
+  const { data: createdBucket, error: createBucketError } = await supabase
+    .storage
+    .createBucket(bucketName, options);
+
+  if (createBucketError && !String(createBucketError.message || '').toLowerCase().includes('already exists')) {
+    throw createBucketError;
+  }
+
+  return createdBucket || { name: bucketName, public: Boolean(options.public) };
+};
+
+const parseDataUrl = (dataUrl) => {
+  const match = String(dataUrl || '').match(/^data:([^;]+);base64,(.+)$/);
+  if (!match) {
+    throw new Error('Invalid image payload');
+  }
+
+  return {
+    contentType: match[1],
+    buffer: Buffer.from(match[2], 'base64'),
+  };
 };
 
 const getMonthlyPlanValue = (plan) => (plan === 'yearly' ? 15000 / 12 : SUBSCRIPTION_FEE_INR);
@@ -285,6 +598,92 @@ const attachWinnerAuditLogs = async (winners) => {
 const enrichWinners = async (winners) => {
   const withProofUrls = await attachProofUrls(winners || []);
   return attachWinnerAuditLogs(withProofUrls);
+};
+
+const listCharitiesWithFallback = async () => {
+  const fallbackColumns = new Set();
+
+  while (true) {
+    const hasSpotlight = !fallbackColumns.has('is_spotlight');
+    const hasRaised = !fallbackColumns.has('total_raised');
+    const hasImage = !fallbackColumns.has('image_url');
+    const hasEvents = !fallbackColumns.has('upcoming_events');
+    const hasLogo = !fallbackColumns.has('logo_url');
+
+    const selectedColumns = [
+      'id',
+      'name',
+      'description',
+      hasLogo ? 'logo_url' : null,
+      hasImage ? 'image_url' : null,
+      hasEvents ? 'upcoming_events' : null,
+      hasSpotlight ? 'is_spotlight' : null,
+      hasRaised ? 'total_raised' : null,
+      'created_at',
+      'updated_at',
+    ].filter(Boolean).join(', ');
+
+    let query = supabase
+      .from('charities')
+      .select(selectedColumns);
+
+    if (hasSpotlight) {
+      query = query.order('is_spotlight', { ascending: false });
+    }
+
+    if (hasRaised) {
+      query = query.order('total_raised', { ascending: false });
+    }
+
+    query = query.order('name');
+
+    const { data, error } = await query;
+    if (!error) {
+      return (data || []).map((charity) => normalizeCharityRecord(charity));
+    }
+
+    if (!isMissingCharityColumnError(error)) {
+      throw error;
+    }
+
+    const missingColumn = getMissingCharityColumnName(error);
+    if (!missingColumn || fallbackColumns.has(missingColumn)) {
+      throw error;
+    }
+
+    fallbackColumns.add(missingColumn);
+  }
+};
+
+const saveCharityWithFallback = async ({ method, charityId, payload }) => {
+  const omittedColumns = new Set();
+
+  while (true) {
+    const currentPayload = removeCharityColumns(payload, [...omittedColumns]);
+    let query = supabase.from('charities');
+
+    if (method === 'insert') {
+      query = query.insert([currentPayload]);
+    } else {
+      query = query.update(currentPayload).eq('id', charityId);
+    }
+
+    const { data, error } = await query.select().single();
+    if (!error) {
+      return normalizeCharityRecord(data);
+    }
+
+    if (!isMissingCharityColumnError(error)) {
+      throw error;
+    }
+
+    const missingColumn = getMissingCharityColumnName(error);
+    if (!missingColumn || omittedColumns.has(missingColumn)) {
+      throw error;
+    }
+
+    omittedColumns.add(missingColumn);
+  }
 };
 
 // --- USER MANAGEMENT ---
@@ -509,16 +908,82 @@ router.delete('/users/:id/scores/:scoreId', requireAdmin, async (req, res) => {
 
 // --- CHARITY MANAGEMENT ---
 
+router.post('/storage/charity-assets/ensure', requireAdmin, async (_req, res) => {
+  try {
+    const bucket = await ensureBucket('charity-assets', {
+      public: true,
+      fileSizeLimit: 5 * 1024 * 1024,
+      allowedMimeTypes: ['image/png', 'image/jpeg', 'image/webp', 'image/gif', 'image/svg+xml'],
+    });
+
+    res.json({
+      success: true,
+      bucket: bucket?.name || 'charity-assets',
+    });
+  } catch (error) {
+    console.error('Ensure charity-assets bucket error:', error);
+    res.status(500).json({ error: error.message || 'Failed to prepare charity image storage' });
+  }
+});
+
+router.post('/storage/charity-assets/upload', requireAdmin, async (req, res) => {
+  try {
+    const { file_name, file_data, field = 'image' } = req.body || {};
+
+    if (!file_name || !file_data) {
+      return res.status(400).json({ error: 'file_name and file_data are required' });
+    }
+
+    const safeField = ['logo_url', 'image_url'].includes(field) ? field : 'image';
+    const safeFileName = String(file_name).replace(/[^a-zA-Z0-9._-]/g, '-');
+    const { contentType, buffer } = parseDataUrl(file_data);
+
+    if (!contentType.startsWith('image/')) {
+      return res.status(400).json({ error: 'Only image uploads are allowed' });
+    }
+
+    await ensureBucket('charity-assets', {
+      public: true,
+      fileSizeLimit: 5 * 1024 * 1024,
+      allowedMimeTypes: ['image/png', 'image/jpeg', 'image/webp', 'image/gif', 'image/svg+xml'],
+    });
+
+    const storagePath = `charities/${Date.now()}-${safeField}-${safeFileName}`;
+    const { error: uploadError } = await supabase
+      .storage
+      .from('charity-assets')
+      .upload(storagePath, buffer, {
+        contentType,
+        upsert: true,
+      });
+
+    if (uploadError) {
+      throw uploadError;
+    }
+
+    const { data } = supabase
+      .storage
+      .from('charity-assets')
+      .getPublicUrl(storagePath);
+
+    res.json({
+      path: storagePath,
+      public_url: data?.publicUrl || null,
+    });
+  } catch (error) {
+    console.error('Charity asset upload error:', error);
+    const message = error.message || 'Failed to upload charity image';
+    const statusCode = message.includes('required') || message.includes('Invalid image') || message.includes('Only image')
+      ? 400
+      : 500;
+    res.status(statusCode).json({ error: message });
+  }
+});
+
 router.get('/charities', requireAdmin, async (_req, res) => {
   try {
-    const { data, error } = await supabase
-      .from('charities')
-      .select('*')
-      .order('is_spotlight', { ascending: false })
-      .order('name');
-
-    if (error) throw error;
-    res.json(data);
+    const charities = await listCharitiesWithFallback();
+    res.json(charities);
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -527,15 +992,19 @@ router.get('/charities', requireAdmin, async (_req, res) => {
 router.post('/charities', requireAdmin, async (req, res) => {
   try {
     const payload = buildCharityPayload(req.body);
-    const { data, error } = await supabase
-      .from('charities')
-      .insert([payload])
-      .select()
-      .single();
+    const data = await saveCharityWithFallback({
+      method: 'insert',
+      payload,
+    });
 
-    if (error) throw error;
     if (data.is_spotlight) {
-      await clearOtherSpotlights(data.id);
+      try {
+        await clearOtherSpotlights(data.id);
+      } catch (spotlightError) {
+        if (!isMissingCharityColumnError(spotlightError)) {
+          throw spotlightError;
+        }
+      }
     }
 
     res.status(201).json(data);
@@ -550,16 +1019,20 @@ router.put('/charities/:id', requireAdmin, async (req, res) => {
     const payload = buildCharityPayload(req.body);
     payload.updated_at = new Date().toISOString();
 
-    const { data, error } = await supabase
-      .from('charities')
-      .update(payload)
-      .eq('id', req.params.id)
-      .select()
-      .single();
+    const data = await saveCharityWithFallback({
+      method: 'update',
+      charityId: req.params.id,
+      payload,
+    });
 
-    if (error) throw error;
     if (data.is_spotlight) {
-      await clearOtherSpotlights(data.id);
+      try {
+        await clearOtherSpotlights(data.id);
+      } catch (spotlightError) {
+        if (!isMissingCharityColumnError(spotlightError)) {
+          throw spotlightError;
+        }
+      }
     }
 
     res.json(data);
@@ -590,85 +1063,13 @@ router.post('/draws/simulate', requireAdmin, async (req, res) => {
       return res.status(400).json({ error: 'month_year is required for simulation' });
     }
 
-    const { start, end, monthYear, label } = getMonthRange(req.body.month_year);
-
-    let [{ data: participants, error: userError }, { data: scores, error: scoreError }] = await Promise.all([
-      supabase
-        .from('users')
-        .select('id, full_name, email, subscription_status, subscription_plan')
-        .eq('subscription_status', 'active'),
-      supabase
-        .from('scores')
-        .select('user_id, score, played_date')
-        .gte('played_date', formatDateOnly(start))
-        .lt('played_date', formatDateOnly(end)),
-    ]);
-
-    if (userError && isMissingSubscriptionPlanColumn(userError)) {
-      const fallbackUsersResult = await supabase
-        .from('users')
-        .select('id, full_name, email, subscription_status')
-        .eq('subscription_status', 'active');
-
-      participants = withDefaultSubscriptionPlans(fallbackUsersResult.data);
-      userError = fallbackUsersResult.error;
-    }
-
-    if (userError) throw userError;
-    if (scoreError) throw scoreError;
-
-    const scoreFrequency = {};
-    const scoresByUser = {};
-
-    for (const scoreEntry of scores || []) {
-      scoreFrequency[scoreEntry.score] = (scoreFrequency[scoreEntry.score] || 0) + 1;
-      scoresByUser[scoreEntry.user_id] = scoresByUser[scoreEntry.user_id] || [];
-      scoresByUser[scoreEntry.user_id].push(scoreEntry.score);
-    }
-
-    const eligibleUsers = (participants || [])
-      .map((participant) => {
-        const monthlyScores = scoresByUser[participant.id] || [];
-        const scoreCount = monthlyScores.length;
-
-        if (scoreCount < 5) {
-          return null;
-        }
-
-        let weight = 1;
-        if (type === 'algorithmic') {
-          const rawWeight = monthlyScores.reduce((sum, score) => {
-            const frequency = scoreFrequency[score] || 1;
-            return weighting === 'least' ? sum + 1 / frequency : sum + frequency;
-          }, 0);
-          weight = rawWeight > 0 ? rawWeight : 1;
-        }
-
-        return {
-          ...participant,
-          score_count: scoreCount,
-          weight,
-        };
-      })
-      .filter(Boolean);
-
-    const winners = pickUniqueWinners(eligibleUsers);
-    const totalPool = parseFloat(((participants || []).reduce(
-      (sum, participant) => sum + (getMonthlyPlanValue(participant.subscription_plan) * PRIZE_POOL_SHARE),
-      0
-    )).toFixed(2));
-
-    res.json({
-      total_participants: participants?.length || 0,
-      eligible_participants: eligibleUsers.length,
-      total_pool: totalPool,
-      pool_split: DEFAULT_POOL_SPLIT,
-      winners,
-      is_simulation: true,
-      month_year: monthYear,
-      month_label: label,
-      settings: { type, weighting },
+    const simulation = await simulateDrawOutcome({
+      monthYearInput: req.body.month_year,
+      type,
+      weighting,
     });
+
+    res.json(simulation);
   } catch (error) {
     console.error('Simulation Error:', error);
     const message = error.message || 'Draw simulation failed';
@@ -677,21 +1078,26 @@ router.post('/draws/simulate', requireAdmin, async (req, res) => {
 });
 
 router.post('/draws/publish', requireAdmin, async (req, res) => {
-  const { winners = {}, settings = {} } = req.body;
+  const settings = req.body.settings || {};
 
   try {
     if (!req.body.month_year) {
       return res.status(400).json({ error: 'month_year is required for publishing' });
     }
 
-    const { monthYear } = getMonthRange(req.body.month_year);
-    const totalPool = parseNumber(req.body.total_pool, 0);
-    const poolSplit = req.body.pool_split || DEFAULT_POOL_SPLIT;
-    const winnerEntries = Object.entries(winners).filter(([, winner]) => winner?.id);
-
-    if (!winnerEntries.length) {
-      return res.status(400).json({ error: 'At least one winner is required before publishing a draw' });
+    if (!Array.isArray(req.body.winning_numbers) || req.body.winning_numbers.length !== SCORES_PER_DRAW) {
+      return res.status(400).json({ error: `winning_numbers must contain ${SCORES_PER_DRAW} numbers before publishing` });
     }
+
+    const type = settings.type === 'random' ? 'random' : 'algorithmic';
+    const weighting = settings.weighting === 'least' ? 'least' : 'most';
+    const simulation = await simulateDrawOutcome({
+      monthYearInput: req.body.month_year,
+      type,
+      weighting,
+      winningNumbers: req.body.winning_numbers,
+    });
+    const { monthYear } = getMonthRange(req.body.month_year);
 
     const { data: existingDraw, error: existingDrawError } = await supabase
       .from('draws')
@@ -705,30 +1111,62 @@ router.post('/draws/publish', requireAdmin, async (req, res) => {
       return res.status(409).json({ error: 'A published draw already exists for this month' });
     }
 
+    const payload = {
+      month_year: monthYear,
+      status: 'published',
+      settings: simulation.settings,
+      total_pool: simulation.total_pool,
+      pool_split: simulation.pool_split,
+      winning_numbers: simulation.winning_numbers,
+      published_at: new Date().toISOString(),
+    };
+
+    // Only add jackpot_rollover if the column exists
+    if (simulation.outgoing_jackpot_rollover !== undefined) {
+      payload.jackpot_rollover = simulation.outgoing_jackpot_rollover;
+    }
+
     const { data: draw, error: drawError } = await supabase
       .from('draws')
-      .insert([{
-        month_year: monthYear,
-        status: 'published',
-        settings,
-        total_pool: totalPool,
-        pool_split: poolSplit,
-        published_at: new Date().toISOString(),
-      }])
+      .insert([payload])
       .select()
       .single();
 
-    if (drawError) throw drawError;
+    if (drawError) {
+      if (isMissingJackpotRolloverColumn(drawError)) {
+        // Retry without jackpot_rollover
+        const { data: retryDraw, error: retryError } = await supabase
+          .from('draws')
+          .insert([{
+            month_year: monthYear,
+            status: 'published',
+            settings: simulation.settings,
+            total_pool: simulation.total_pool,
+            pool_split: simulation.pool_split,
+            winning_numbers: simulation.winning_numbers,
+            published_at: new Date().toISOString(),
+          }])
+          .select()
+          .single();
+        
+        if (retryError) throw retryError;
+        // manually set draw and continue
+      } else {
+        throw drawError;
+      }
+    }
 
-    const winnerRecords = winnerEntries
-      .map(([tierKey, winner]) => ({
+    const winnerRecords = Object.values(simulation.prize_breakdown || [])
+      .flatMap((tierResult) => tierResult.winners.map((winner) => ({
         draw_id: draw.id,
         user_id: winner.id,
-        prize_tier: parseInt(tierKey.split('_')[1], 10),
-        amount: parseFloat((totalPool * parseNumber(poolSplit[tierKey], 0)).toFixed(2)),
+        prize_tier: tierResult.tier,
+        amount: tierResult.per_winner_amount,
+        matched_numbers: winner.matched_numbers,
+        submitted_scores: winner.submitted_scores,
         verification_status: 'pending',
         payment_status: 'pending',
-      }));
+      })));
 
     let insertedWinners = [];
     if (winnerRecords.length > 0) {
@@ -750,17 +1188,20 @@ router.post('/draws/publish', requireAdmin, async (req, res) => {
             draw_id: draw.id,
             prize_tier: winner.prize_tier,
             amount: winner.amount,
+            winning_numbers: simulation.winning_numbers,
+            matched_numbers: winner.matched_numbers || [],
           },
         }))),
         insertNotifications(insertedWinners.map((winner) => ({
           user_id: winner.user_id,
           type: 'winner-announcement',
           title: 'You have won this month’s draw',
-          message: `You matched ${winner.prize_tier} numbers and have a pending reward of INR ${parseNumber(winner.amount, 0).toLocaleString('en-IN')}.`,
+          message: `You matched ${winner.prize_tier} winning numbers (${formatNumberSeries(winner.matched_numbers || [])}) and have a pending reward of INR ${parseNumber(winner.amount, 0).toLocaleString('en-IN')}.`,
           metadata: {
             draw_id: draw.id,
             winner_id: winner.id,
             month_year: monthYear,
+            winning_numbers: simulation.winning_numbers,
           },
         }))),
       ]);
@@ -770,6 +1211,7 @@ router.post('/draws/publish', requireAdmin, async (req, res) => {
       message: 'Draw published and winners recorded',
       draw_id: draw.id,
       winner_count: winnerRecords.length,
+      winning_numbers: simulation.winning_numbers,
     });
   } catch (error) {
     console.error('Publish Error:', error);
@@ -777,7 +1219,7 @@ router.post('/draws/publish', requireAdmin, async (req, res) => {
     const statusCode = message.includes('already exists')
       ? 409
       : message.includes('month_year')
-      || message.includes('At least one winner')
+      || message.includes('winning_numbers')
       || message.includes('Invalid date')
       ? 400
       : 500;
@@ -789,10 +1231,19 @@ router.post('/draws/publish', requireAdmin, async (req, res) => {
 
 router.get('/winners', requireAdmin, async (_req, res) => {
   try {
-    const { data, error } = await supabase
+    let { data, error } = await supabase
       .from('winners')
-      .select('*, users(full_name, email), draws(month_year, published_at, total_pool)')
+      .select('*, users(full_name, email), draws(month_year, published_at, total_pool, winning_numbers, jackpot_rollover)')
       .order('created_at', { ascending: false });
+
+    if (error && isMissingJackpotRolloverColumn(error)) {
+      const fallback = await supabase
+        .from('winners')
+        .select('*, users(full_name, email), draws(month_year, published_at, total_pool, winning_numbers)')
+        .order('created_at', { ascending: false });
+      data = (fallback.data || []).map(w => ({ ...w, draws: { ...w.draws, jackpot_rollover: 0 } }));
+      error = fallback.error;
+    }
 
     if (error) throw error;
     const enrichedWinners = await enrichWinners(data || []);
@@ -839,14 +1290,21 @@ router.put('/winners/:id', requireAdmin, async (req, res) => {
 
     const { data: currentWinner, error: winnerFetchError } = await supabase
       .from('winners')
-      .select('verification_status')
+      .select('verification_status, payment_status')
       .eq('id', req.params.id)
       .single();
 
     if (winnerFetchError) throw winnerFetchError;
+
+    if (payment_status === 'paid' && currentWinner.payment_status === 'paid') {
+      return res.status(400).json({ error: 'Payment is already marked as paid' });
+    }
+
     if (updates.payment_status === 'paid' && currentWinner.verification_status !== 'approved' && updates.verification_status !== 'approved') {
       return res.status(400).json({ error: 'Winner must be approved before payment is marked as paid' });
     }
+
+    const paymentStatusChanged = payment_status !== undefined && payment_status !== currentWinner.payment_status;
 
     const auditActions = [];
     if (verification_status && verification_status !== currentWinner.verification_status) {
@@ -863,7 +1321,7 @@ router.put('/winners/:id', requireAdmin, async (req, res) => {
       });
     }
 
-    if (payment_status) {
+    if (paymentStatusChanged) {
       auditActions.push({
         winner_id: req.params.id,
         actor_user_id: req.user.id,
@@ -873,12 +1331,30 @@ router.put('/winners/:id', requireAdmin, async (req, res) => {
       });
     }
 
-    const { data, error } = await supabase
+    let { data, error } = await supabase
       .from('winners')
       .update(updates)
       .eq('id', req.params.id)
-      .select('*, users(full_name, email), draws(month_year, published_at, total_pool)')
+      .select('*, users(full_name, email), draws(month_year, published_at, total_pool, winning_numbers, jackpot_rollover)')
       .single();
+
+    if (error && isMissingJackpotRolloverColumn(error)) {
+      const fallback = await supabase
+        .from('winners')
+        .update(updates)
+        .eq('id', req.params.id)
+        .select('*, users(full_name, email), draws(month_year, published_at, total_pool, winning_numbers)')
+        .single();
+      data = fallback.data
+        ? {
+          ...fallback.data,
+          draws: fallback.data.draws
+            ? { ...fallback.data.draws, jackpot_rollover: 0 }
+            : fallback.data.draws,
+        }
+        : fallback.data;
+      error = fallback.error;
+    }
 
     if (error) throw error;
 
@@ -899,7 +1375,7 @@ router.put('/winners/:id', requireAdmin, async (req, res) => {
             verification_status,
           },
         } : null,
-        payment_status === 'paid' ? {
+        paymentStatusChanged && payment_status === 'paid' ? {
           user_id: data.user_id,
           type: 'winner-payment',
           title: 'Prize payment processed',
@@ -928,17 +1404,23 @@ router.get('/stats', requireAdmin, async (_req, res) => {
       { count: userCount, error: userCountError },
       activeUsersResult,
       { count: scoreCount, error: scoreCountError },
-      { data: charities, error: charitiesError },
       { data: draws, error: drawsError },
       { data: winners, error: winnersError },
     ] = await Promise.all([
       supabase.from('users').select('*', { count: 'exact', head: true }),
       supabase.from('users').select('subscription_plan').eq('subscription_status', 'active'),
       supabase.from('scores').select('*', { count: 'exact', head: true }),
-      supabase.from('charities').select('*').order('total_raised', { ascending: false }),
       supabase.from('draws').select('*').order('month_year', { ascending: false }).limit(6),
       supabase.from('winners').select('id, amount, payment_status, verification_status, prize_tier, created_at').order('created_at', { ascending: false }).limit(25),
     ]);
+
+    let charities = [];
+    let charitiesError = null;
+    try {
+      charities = await listCharitiesWithFallback();
+    } catch (error) {
+      charitiesError = error;
+    }
 
     let activeUsers = activeUsersResult.data;
     let activeSubsError = activeUsersResult.error;

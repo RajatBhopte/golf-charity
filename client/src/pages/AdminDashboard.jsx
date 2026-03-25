@@ -22,6 +22,7 @@ import AdminUserList from '../components/AdminUserList';
 import AdminCharityManager from '../components/AdminCharityManager';
 import AdminDrawEngine from '../components/AdminDrawEngine';
 import AdminWinnerVerification from '../components/AdminWinnerVerification';
+import AdminSidebar from '../components/AdminSidebar';
 
 export default function AdminDashboard() {
 
@@ -30,66 +31,51 @@ export default function AdminDashboard() {
 
   const tabs = [
     { id: 'analytics', name: 'Analytics', icon: BarChart3 },
-    { id: 'users', name: 'User Management', icon: Users },
+    { id: 'users', name: 'Users', icon: Users },
     { id: 'draws', name: 'Draw Engine', icon: Trophy },
     { id: 'charities', name: 'Charities', icon: Heart },
-    { id: 'winners', name: 'Winner Verification', icon: CheckCircle },
+    { id: 'winners', name: 'Verification', icon: CheckCircle },
   ];
 
   return (
-    <div className={`min-h-screen transition-colors duration-300 ${isDark ? 'bg-dark-bg text-white' : 'bg-light-bg text-light-text'}`}>
-      <main className="container-max px-4 sm:px-6 lg:px-8 pt-10 pb-16">
-        <div className="flex flex-col lg:flex-row gap-8">
-          
-          {/* Sidebar Navigation */}
-          <aside className="lg:w-64 shrink-0">
-            <div className={`glass-card p-4 rounded-2xl border sticky top-24 ${isDark ? 'bg-dark-card border-dark-border' : 'bg-white border-light-border shadow-sm'}`}>
-              <nav className="space-y-1">
-                {tabs.map((tab) => {
-                  const Icon = tab.icon;
-                  return (
-                    <button
-                      key={tab.id}
-                      onClick={() => setActiveTab(tab.id)}
-                      className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all ${
-                        activeTab === tab.id
-                          ? 'bg-brand-500 text-white shadow-lg shadow-brand-500/20'
-                          : isDark
-                            ? 'text-gray-400 hover:text-white hover:bg-dark-hover'
-                            : 'text-light-subtext hover:text-light-text hover:bg-light-hover'
-                      }`}
-                    >
-                      <Icon size={18} />
-                      {tab.name}
-                      {activeTab === tab.id && <ChevronRight size={14} className="ml-auto" />}
-                    </button>
-                  );
-                })}
-              </nav>
-            </div>
-          </aside>
+    <div className={`min-h-screen transition-colors duration-300 flex ${isDark ? 'bg-dark-bg text-white' : 'bg-light-bg text-light-text'}`}>
+      
+      {/* New Responsive Sidebar */}
+      <AdminSidebar activeTab={activeTab} setActiveTab={setActiveTab} tabs={tabs} />
 
-          {/* Main Content Area */}
-          <div className="flex-grow">
-            <header className="mb-8">
-              <h1 className="text-3xl font-bold tracking-tight mb-2 uppercase">
-                Admin <span className="gradient-text">{activeTab}</span>
-              </h1>
-              <p className={`${isDark ? 'text-gray-400' : 'text-light-subtext'}`}>
+      {/* Main Content Area */}
+      <main className="flex-grow lg:ml-72 min-h-screen">
+        <div className="container-max px-4 sm:px-6 lg:px-8 py-8 lg:py-12 mt-16 lg:mt-0">
+          
+          <header className="mb-10 flex flex-col md:flex-row md:items-end justify-between gap-4">
+            <div>
+              <div className="flex items-center gap-2 mb-2">
+                 <div className="w-2 h-8 bg-brand-500 rounded-full" />
+                 <h1 className="text-3xl lg:text-4xl font-black tracking-tight uppercase">
+                   Dashboard <span className="gradient-text">{activeTab}</span>
+                 </h1>
+              </div>
+              <p className={`text-sm lg:text-base ${isDark ? 'text-gray-400' : 'text-light-subtext'}`}>
                 Managing the platform infrastructure and player rewards.
               </p>
-            </header>
-
-            {/* Render Tab Content */}
-            <div className="space-y-8">
-              {activeTab === 'analytics' && <AnalyticsOverview isDark={isDark} />}
-              {activeTab === 'users' && <AdminUserList isDark={isDark} />}
-              {activeTab === 'draws' && <AdminDrawEngine isDark={isDark} />}
-              {activeTab === 'charities' && <AdminCharityManager isDark={isDark} />}
-              {activeTab === 'winners' && <AdminWinnerVerification isDark={isDark} />}
             </div>
+            
+            <div className={`hidden md:block px-4 py-2 rounded-xl border text-xs font-bold uppercase tracking-widest ${
+              isDark ? 'bg-dark-card border-dark-border' : 'bg-white border-light-border'
+            }`}>
+              {new Date().toLocaleDateString([], { weekday: 'long', month: 'long', day: 'numeric' })}
+            </div>
+          </header>
 
+          {/* Render Tab Content */}
+          <div className="animate-fade-in">
+            {activeTab === 'analytics' && <AnalyticsOverview isDark={isDark} />}
+            {activeTab === 'users' && <AdminUserList isDark={isDark} />}
+            {activeTab === 'draws' && <AdminDrawEngine isDark={isDark} />}
+            {activeTab === 'charities' && <AdminCharityManager isDark={isDark} />}
+            {activeTab === 'winners' && <AdminWinnerVerification isDark={isDark} />}
           </div>
+
         </div>
       </main>
     </div>

@@ -8,6 +8,10 @@ const formatAuditAction = (action) => action
   ?.replaceAll('_', ' ')
   .replace(/\b\w/g, (character) => character.toUpperCase()) || 'Update';
 
+const formatNumberSeries = (numbers = []) => (
+  Array.isArray(numbers) && numbers.length ? numbers.join(', ') : 'None'
+);
+
 export default function AdminWinnerVerification({ isDark }) {
   const { session } = useAuth();
   const [winners, setWinners] = useState([]);
@@ -160,6 +164,15 @@ export default function AdminWinnerVerification({ isDark }) {
                         ? new Date(w.draws.month_year).toLocaleDateString([], { month: 'long', year: 'numeric' })
                         : 'Unknown draw'}
                     </div>
+                    <div className="text-xs text-gray-500">
+                      Winning Numbers: {formatNumberSeries(w.draws?.winning_numbers)}
+                    </div>
+                    <div className="text-xs text-gray-500">
+                      Submitted Scores: {formatNumberSeries(w.submitted_scores)}
+                    </div>
+                    <div className="text-xs text-brand-500">
+                      Matched Numbers: {formatNumberSeries(w.matched_numbers)}
+                    </div>
                     <div className="text-xs text-gray-500 mt-1">
                       {w.users?.email || 'No email'} · Updated {w.updated_at ? new Date(w.updated_at).toLocaleString() : 'n/a'}
                     </div>
@@ -218,19 +231,27 @@ export default function AdminWinnerVerification({ isDark }) {
                 </td>
                 <td className="px-6 py-4">
                   <div className="flex justify-center">
+                    {(() => {
+                      const isPaid = w.payment_status === 'paid';
+                      const canProcessPayment = w.verification_status === 'approved' && !isPaid;
+                      const isUpdating = updatingId === w.id;
+
+                      return (
                      <button 
-                        disabled={w.verification_status !== 'approved'}
+                        disabled={!canProcessPayment || isUpdating}
                         onClick={() => updateStatus(w.id, { payment_status: 'paid' })}
                         className={`flex items-center gap-2 px-4 py-1.5 rounded-lg text-xs font-bold transition-all ${
                           w.payment_status === 'paid' 
                             ? 'bg-blue-500/10 text-blue-500' 
-                            : w.verification_status === 'approved' 
+                            : canProcessPayment
                               ? 'bg-brand-500 text-white hover:scale-105' 
                               : 'bg-gray-500/10 text-gray-500 cursor-not-allowed opacity-30'
                         }`}
                      >
                        <IndianRupee size={14} /> {w.payment_status === 'paid' ? 'Marked Paid' : 'Process Payment'}
                      </button>
+                      );
+                    })()}
                   </div>
                 </td>
               </tr>

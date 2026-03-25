@@ -27,7 +27,7 @@ export const AuthRoute = () => {
  * Redirects to /subscribe if no active subscription found.
  */
 export const SubRoute = () => {
-  const { session, loading } = useAuth();
+  const { session, user, loading } = useAuth();
   const location = useLocation();
 
   if (loading) return null;
@@ -36,12 +36,9 @@ export const SubRoute = () => {
     return <Navigate to="/login" state={{ from: location }} replace />;
   }
 
-  // Temporarily disabling subscription check until Stripe is implemented
-  // if (user?.subscription_status !== 'active') {
-  //   // If they don't have an active subscription, send them to the plan selection
-  //   // (This usually means their payment failed, they canceled, or they haven't finished signup)
-  //   return <Navigate to="/subscribe" state={{ from: location }} replace />;
-  // }
+  if (user?.subscription_status !== 'active') {
+    return <Navigate to="/subscribe" state={{ from: location }} replace />;
+  }
 
   return <Outlet />;
 };

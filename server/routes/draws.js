@@ -8,6 +8,43 @@ const isMissingSchemaError = (error) => {
   return message.includes('does not exist') || message.includes('could not find');
 };
 
+const isMissingJackpotRolloverColumn = (error) => {
+  const message = String(error?.message || '').toLowerCase();
+  return message.includes('jackpot_rollover') && message.includes('does not exist');
+};
+
+const ensureBucket = async (bucketName, options = {}) => {
+  const { data: existingBucket, error: getBucketError } = await supabase
+    .storage
+    .getBucket(bucketName);
+
+  if (!getBucketError && existingBucket) {
+    return existingBucket;
+  }
+
+  const { data: createdBucket, error: createBucketError } = await supabase
+    .storage
+    .createBucket(bucketName, options);
+
+  if (createBucketError && !String(createBucketError.message || '').toLowerCase().includes('already exists')) {
+    throw createBucketError;
+  }
+
+  return createdBucket || { name: bucketName, public: Boolean(options.public) };
+};
+
+const parseDataUrl = (dataUrl) => {
+  const match = String(dataUrl || '').match(/^data:([^;]+);base64,(.+)$/);
+  if (!match) {
+    throw new Error('Invalid image payload');
+  }
+
+  return {
+    contentType: match[1],
+    buffer: Buffer.from(match[2], 'base64'),
+  };
+};
+
 const attachProofUrls = async (wins) => Promise.all((wins || []).map(async (win) => {
   const proofPath = win.screenshot_url;
 
@@ -32,11 +69,21 @@ const attachProofUrls = async (wins) => Promise.all((wins || []).map(async (win)
 
 router.get('/', async (_req, res) => {
   try {
-    const { data, error } = await supabase
+    let { data, error } = await supabase
       .from('draws')
-      .select('id, month_year, status, total_pool, pool_split, published_at')
+      .select('id, month_year, status, total_pool, pool_split, winning_numbers, jackpot_rollover, published_at')
       .eq('status', 'published')
       .order('month_year', { ascending: false });
+
+    if (error && isMissingJackpotRolloverColumn(error)) {
+      const fallback = await supabase
+        .from('draws')
+        .select('id, month_year, status, total_pool, pool_split, winning_numbers, published_at')
+        .eq('status', 'published')
+        .order('month_year', { ascending: false });
+      data = (fallback.data || []).map(d => ({ ...d, jackpot_rollover: 0 }));
+      error = fallback.error;
+    }
 
     if (error && isMissingSchemaError(error)) {
       return res.json([]);
@@ -52,11 +99,21 @@ router.get('/', async (_req, res) => {
 
 router.get('/my-wins', requireAuth, async (req, res) => {
   try {
-    const { data, error } = await supabase
+    let { data, error } = await supabase
       .from('winners')
-      .select('*, draws(month_year, published_at, total_pool)')
+      .select('*, draws(month_year, published_at, total_pool, winning_numbers, jackpot_rollover)')
       .eq('user_id', req.user.id)
       .order('created_at', { ascending: false });
+
+    if (error && isMissingJackpotRolloverColumn(error)) {
+      const fallback = await supabase
+        .from('winners')
+        .select('*, draws(month_year, published_at, total_pool, winning_numbers)')
+        .eq('user_id', req.user.id)
+        .order('created_at', { ascending: false });
+      data = (fallback.data || []).map(w => ({ ...w, draws: { ...w.draws, jackpot_rollover: 0 } }));
+      error = fallback.error;
+    }
 
     if (error && isMissingSchemaError(error)) {
       return res.json([]);
@@ -72,12 +129,6 @@ router.get('/my-wins', requireAuth, async (req, res) => {
 });
 
 router.post('/winners/:id/proof', requireAuth, async (req, res) => {
-  const { screenshot_url } = req.body;
-
-  if (!screenshot_url?.trim()) {
-    return res.status(400).json({ error: 'A proof screenshot path is required' });
-  }
-
   try {
     const { data: winner, error: winnerError } = await supabase
       .from('winners')
@@ -90,19 +141,82 @@ router.post('/winners/:id/proof', requireAuth, async (req, res) => {
       return res.status(404).json({ error: 'Winner record not found' });
     }
 
+    let screenshotUrl = req.body?.screenshot_url?.trim() || '';
+
+    if (req.body?.file_name && req.body?.file_data) {
+      const safeFileName = String(req.body.file_name).replace(/[^a-zA-Z0-9._-]/g, '-');
+      const { contentType, buffer } = parseDataUrl(req.body.file_data);
+
+      if (!contentType.startsWith('image/')) {
+        return res.status(400).json({ error: 'Only image uploads are allowed' });
+      }
+
+      await ensureBucket('winner-proofs', {
+        public: false,
+        fileSizeLimit: 5 * 1024 * 1024,
+        allowedMimeTypes: ['image/png', 'image/jpeg', 'image/webp', 'image/gif', 'image/svg+xml'],
+      });
+
+      const storagePath = `${req.user.id}/${req.params.id}/${Date.now()}-${safeFileName}`;
+      const { error: uploadError } = await supabase
+        .storage
+        .from('winner-proofs')
+        .upload(storagePath, buffer, {
+          contentType,
+          upsert: true,
+        });
+
+      if (uploadError) {
+        throw uploadError;
+      }
+
+      screenshotUrl = storagePath;
+    }
+
+    if (!screenshotUrl) {
+      return res.status(400).json({ error: 'A proof screenshot or image file is required' });
+    }
+
     const { data: updatedWinner, error: updateError } = await supabase
       .from('winners')
       .update({
-        screenshot_url: screenshot_url.trim(),
+        screenshot_url: screenshotUrl,
         verification_status: 'pending',
         updated_at: new Date().toISOString(),
       })
       .eq('id', req.params.id)
       .eq('user_id', req.user.id)
-      .select('*, draws(month_year, published_at, total_pool)')
+      .select('*, draws(month_year, published_at, total_pool, winning_numbers, jackpot_rollover)')
       .single();
 
-    if (updateError) throw updateError;
+    let resolvedWinner = updatedWinner;
+    let resolvedError = updateError;
+
+    if (resolvedError && isMissingJackpotRolloverColumn(resolvedError)) {
+      const fallback = await supabase
+        .from('winners')
+        .update({
+          screenshot_url: screenshotUrl,
+          verification_status: 'pending',
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', req.params.id)
+        .eq('user_id', req.user.id)
+        .select('*, draws(month_year, published_at, total_pool, winning_numbers)')
+        .single();
+
+      resolvedWinner = fallback.data
+        ? {
+          ...fallback.data,
+          draws: fallback.data.draws
+            ? { ...fallback.data.draws, jackpot_rollover: 0 }
+            : fallback.data.draws,
+        }
+        : fallback.data;
+      resolvedError = fallback.error;
+    }
+
+    if (resolvedError) throw resolvedError;
 
     await Promise.all([
       supabase
@@ -113,7 +227,7 @@ router.post('/winners/:id/proof', requireAuth, async (req, res) => {
           action: 'proof_submitted',
           notes: 'Winner uploaded score proof for review',
           metadata: {
-            screenshot_url: screenshot_url.trim(),
+            screenshot_url: screenshotUrl,
           },
         }]),
       supabase
@@ -129,11 +243,15 @@ router.post('/winners/:id/proof', requireAuth, async (req, res) => {
         }]),
     ]);
 
-    const [resolvedWinner] = await attachProofUrls([updatedWinner]);
-    res.json(resolvedWinner);
+    const [winnerWithSignedProof] = await attachProofUrls([resolvedWinner]);
+    res.json(winnerWithSignedProof);
   } catch (error) {
     console.error('Winner proof submission error:', error);
-    res.status(500).json({ error: 'Failed to submit proof' });
+    const message = error.message || 'Failed to submit proof';
+    const statusCode = message.includes('required') || message.includes('Only image') || message.includes('Invalid image')
+      ? 400
+      : 500;
+    res.status(statusCode).json({ error: message });
   }
 });
 

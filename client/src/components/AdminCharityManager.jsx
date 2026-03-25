@@ -3,7 +3,6 @@ import { useAuth } from '../context/AuthContext';
 import { Plus, Edit2, Trash2, Heart, Star, Loader2, Upload, X } from 'lucide-react';
 import { buildApiUrl } from '../utils/apiBase';
 import { formatCurrencyINR } from '../utils/currency';
-import { supabase } from '../utils/supabase';
 
 const emptyForm = {
   name: '',
@@ -56,31 +55,34 @@ export default function AdminCharityManager({ isDark }) {
     setError('');
 
     try {
-      const safeFileName = file.name.replace(/[^a-zA-Z0-9._-]/g, '-');
-      const entityId = editingCharity?.id || 'new';
-      const storagePath = `charities/${entityId}/${field}-${Date.now()}-${safeFileName}`;
+      const fileData = await new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result);
+        reader.onerror = () => reject(new Error('Failed to read image file'));
+        reader.readAsDataURL(file);
+      });
 
-      const { error: uploadError } = await supabase
-        .storage
-        .from('charity-assets')
-        .upload(storagePath, file, { upsert: true });
+      const response = await fetch(buildApiUrl('/admin/storage/charity-assets/upload'), {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session?.access_token}`,
+        },
+        body: JSON.stringify({
+          file_name: file.name,
+          file_data: fileData,
+          field,
+        }),
+      });
 
-      if (uploadError) {
-        throw new Error(
-          uploadError.message?.includes('Bucket not found')
-            ? 'Supabase bucket "charity-assets" was not found. Create it first to upload charity images.'
-            : uploadError.message || 'Failed to upload image'
-        );
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to upload image');
       }
-
-      const { data } = supabase
-        .storage
-        .from('charity-assets')
-        .getPublicUrl(storagePath);
 
       setFormData((current) => ({
         ...current,
-        [field]: data?.publicUrl || '',
+        [field]: data?.public_url || '',
       }));
     } catch (uploadError) {
       setError(uploadError.message || 'Failed to upload image');

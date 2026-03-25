@@ -11,10 +11,23 @@ CREATE TABLE IF NOT EXISTS public.users (
   email TEXT -- Optional, but helpful for internal scripts
 );
 
+-- Backfill columns for existing databases
+ALTER TABLE public.users ADD COLUMN IF NOT EXISTS full_name TEXT;
+ALTER TABLE public.users ADD COLUMN IF NOT EXISTS role TEXT DEFAULT 'user';
+ALTER TABLE public.users ADD COLUMN IF NOT EXISTS subscription_plan TEXT DEFAULT 'monthly';
+ALTER TABLE public.users ADD COLUMN IF NOT EXISTS charity_id UUID;
+ALTER TABLE public.users ADD COLUMN IF NOT EXISTS charity_percentage INTEGER DEFAULT 10;
+ALTER TABLE public.users ADD COLUMN IF NOT EXISTS subscription_status TEXT DEFAULT 'active';
+ALTER TABLE public.users ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT NOW();
+ALTER TABLE public.users ADD COLUMN IF NOT EXISTS email TEXT;
+
 -- Enable Row Level Security
 ALTER TABLE public.users ENABLE ROW LEVEL SECURITY;
 
 -- Create policies
+DROP POLICY IF EXISTS "Users can view own profile" ON public.users;
+DROP POLICY IF EXISTS "Users can update own profile" ON public.users;
+
 -- 1. Users can view their own profile
 CREATE POLICY "Users can view own profile" 
 ON public.users 

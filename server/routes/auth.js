@@ -25,7 +25,14 @@ router.post('/sync', async (req, res) => {
     const { data: { user }, error: adminError } = await supabase.auth.admin.getUserById(id);
     
     if (adminError || !user) {
-      return res.status(401).json({ error: 'Invalid or unauthorized user ID' });
+      console.error('Auth sync admin verification failed:', {
+        adminError,
+        requestedUserId: id,
+      });
+      return res.status(401).json({
+        error: 'Invalid or unauthorized user ID',
+        detail: adminError?.message || 'Supabase admin lookup failed',
+      });
     }
 
     // Insert or update the public user profile
@@ -37,7 +44,7 @@ router.post('/sync', async (req, res) => {
       subscription_plan: plan || 'monthly',
       charity_id: charity_id || null,
       charity_percentage: parseInt(charity_percentage, 10) || 10,
-      subscription_status: 'active',
+      subscription_status: 'pending',
       created_at: new Date().toISOString(),
     };
 

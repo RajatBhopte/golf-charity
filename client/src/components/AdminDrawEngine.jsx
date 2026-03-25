@@ -4,6 +4,22 @@ import { Trophy, Settings2, Play, Send, Loader2, Info, AlertTriangle, CreditCard
 import { buildApiUrl } from '../utils/apiBase';
 import { formatCurrencyINR } from '../utils/currency';
 
+const TIER_ORDER = ['tier_5', 'tier_4', 'tier_3'];
+const TIER_STYLES = {
+  tier_5: {
+    badge: 'bg-amber-500/20 text-amber-500',
+    text: 'text-amber-500',
+  },
+  tier_4: {
+    badge: 'bg-slate-400/20 text-slate-400',
+    text: 'text-slate-400',
+  },
+  tier_3: {
+    badge: 'bg-orange-700/20 text-orange-700',
+    text: 'text-orange-700',
+  },
+};
+
 const getCurrentMonthValue = () => {
   const now = new Date();
   const year = now.getFullYear();
@@ -17,6 +33,10 @@ const toMonthStart = (monthValue) => {
   }
   return `${monthValue}-01`;
 };
+
+const formatNumberSeries = (numbers = []) => (
+  Array.isArray(numbers) && numbers.length ? numbers.join(' · ') : 'None'
+);
 
 export default function AdminDrawEngine({ isDark }) {
   const { session } = useAuth();
@@ -77,9 +97,8 @@ export default function AdminDrawEngine({ isDark }) {
       setError('Please choose a valid draw month before publishing.');
       return;
     }
-    const hasAnyWinner = Object.values(simulation.winners || {}).some((winner) => Boolean(winner?.id));
-    if (!hasAnyWinner) {
-      setError('This simulation has no eligible winners yet, so there is nothing to publish.');
+    if (!simulation?.winning_numbers?.length) {
+      setError('Run a simulation before publishing the official winning numbers.');
       return;
     }
 
@@ -94,8 +113,8 @@ export default function AdminDrawEngine({ isDark }) {
           'Authorization': `Bearer ${session?.access_token}`
         },
         body: JSON.stringify({
-          ...simulation,
           month_year: monthStart,
+          winning_numbers: simulation.winning_numbers,
           settings: {
             type: config.type,
             weighting: config.weighting,
@@ -244,7 +263,17 @@ export default function AdminDrawEngine({ isDark }) {
               <div className="space-y-3">
                 <div className="flex justify-between text-sm"><span className="opacity-50">Draw Month:</span> <span className="font-bold">{simulation.month_label}</span></div>
                 <div className="flex justify-between text-sm"><span className="opacity-50">Active Subs:</span> <span className="font-bold">{simulation.total_participants}</span></div>
-                <div className="flex justify-between text-sm"><span className="opacity-50">Eligible (5+ scores):</span> <span className="font-bold text-brand-500">{simulation.eligible_participants}</span></div>
+                <div className="flex justify-between text-sm"><span className="opacity-50">Eligible (5 stored scores):</span> <span className="font-bold text-brand-500">{simulation.eligible_participants}</span></div>
+                <div className="pt-3 border-t border-white/5">
+                  <div className="text-xs uppercase tracking-widest opacity-50 mb-2">Winning Numbers</div>
+                  <div className="font-black text-xl tracking-wide">{formatNumberSeries(simulation.winning_numbers)}</div>
+                </div>
+                {Number(simulation.incoming_jackpot_rollover || 0) > 0 && (
+                  <div className="flex justify-between text-sm">
+                    <span className="opacity-50">Incoming Jackpot Rollover:</span>
+                    <span className="font-bold text-amber-500">{formatCurrencyINR(simulation.incoming_jackpot_rollover)}</span>
+                  </div>
+                )}
                 <div className="pt-3 border-t border-white/5 flex justify-between items-end">
                   <span className="opacity-50">Total Prize Pool:</span> 
                   <span className="text-2xl font-bold">{formatCurrencyINR(simulation.total_pool || 0)}</span>
@@ -255,17 +284,31 @@ export default function AdminDrawEngine({ isDark }) {
             <div className={`glass-card p-6 rounded-2xl border ${isDark ? 'bg-dark-card border-dark-border' : 'bg-white border-light-border shadow-sm'}`}>
               <h3 className="font-bold mb-4 flex items-center gap-2"><CreditCard size={18} className="text-brand-500" /> Pool Splits</h3>
               <div className="space-y-4">
-                {Object.entries(simulation.pool_split).map(([key, percent]) => (
+                {TIER_ORDER.map((key) => {
+                  const breakdown = simulation.prize_breakdown?.[key];
+                  const percent = simulation.pool_split?.[key] || 0;
+                  return (
                   <div key={key}>
                     <div className="flex justify-between text-xs mb-1 uppercase font-bold tracking-widest opacity-60">
                       <span>{key.replace('_', ' ')} Match</span>
                       <span>{percent * 100}%</span>
                     </div>
-                    <div className="flex justify-between items-center bg-black/20 p-2 rounded-lg">
-                      <span className="text-lg font-bold">{formatCurrencyINR(Number(simulation.total_pool || 0) * percent)}</span>
+                    <div className="space-y-2 bg-black/20 p-3 rounded-lg">
+                      <div className="flex justify-between items-center">
+                        <span className="text-lg font-bold">{formatCurrencyINR(breakdown?.total_pool_amount || 0)}</span>
+                        <span className="text-xs opacity-50">{breakdown?.winner_count || 0} winner(s)</span>
+                      </div>
+                      <div className="text-[11px] opacity-60 uppercase tracking-widest">
+                        Per winner: {formatCurrencyINR(breakdown?.per_winner_amount || 0)}
+                      </div>
+                      {Number(breakdown?.rollover_amount || 0) > 0 && (
+                        <div className="text-[11px] font-bold uppercase tracking-widest text-amber-500">
+                          Rolls over: {formatCurrencyINR(breakdown.rollover_amount)}
+                        </div>
+                      )}
                     </div>
                   </div>
-                ))}
+                )})}
               </div>
             </div>
           </div>
@@ -274,37 +317,64 @@ export default function AdminDrawEngine({ isDark }) {
           <div className="lg:col-span-2 space-y-6">
             <div className={`glass-card p-6 rounded-2xl border overflow-hidden relative ${isDark ? 'bg-dark-card border-dark-border' : 'bg-white border-light-border shadow-sm'}`}>
               <div className="absolute top-0 right-0 p-3 bg-amber-500/10 text-amber-500 text-[10px] uppercase font-black tracking-widest border-l border-b border-amber-500/20">Simulated Results</div>
-              <h3 className="font-bold mb-6 flex items-center gap-2"><Trophy size={18} className="text-amber-500" /> Potential Winners</h3>
+              <h3 className="font-bold mb-6 flex items-center gap-2"><Trophy size={18} className="text-amber-500" /> Match Results</h3>
               <div className="space-y-4">
-                {Object.entries(simulation.winners).map(([tier, winner]) => (
-                  <div key={tier} className={`flex items-center gap-4 p-4 rounded-xl border ${isDark ? 'bg-black/20 border-white/5' : 'bg-gray-50 border-gray-100'}`}>
-                    <div className={`w-12 h-12 rounded-full flex items-center justify-center text-xl font-black ${
-                      tier === 'tier_5' ? 'bg-amber-500/20 text-amber-500' : tier === 'tier_4' ? 'bg-slate-400/20 text-slate-400' : 'bg-orange-700/20 text-orange-700'
-                    }`}>
-                      {tier.split('_')[1]}
+                {TIER_ORDER.map((tier) => {
+                  const breakdown = simulation.prize_breakdown?.[tier];
+                  const styles = TIER_STYLES[tier];
+                  return (
+                    <div key={tier} className={`p-4 rounded-xl border ${isDark ? 'bg-black/20 border-white/5' : 'bg-gray-50 border-gray-100'}`}>
+                      <div className="flex items-start gap-4">
+                        <div className={`w-12 h-12 rounded-full flex items-center justify-center text-xl font-black ${styles.badge}`}>
+                          {tier.split('_')[1]}
+                        </div>
+                        <div className="flex-grow">
+                          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-2">
+                            <div>
+                              <div className="font-bold">{tier.replace('_', ' ')} Match</div>
+                              <div className="text-xs opacity-50">
+                                {breakdown?.winner_count || 0} winner(s) · {formatCurrencyINR(breakdown?.per_winner_amount || 0)} each
+                              </div>
+                            </div>
+                            <div className={`text-sm font-bold ${styles.text}`}>
+                              Total tier pool: {formatCurrencyINR(breakdown?.total_pool_amount || 0)}
+                            </div>
+                          </div>
+
+                          {breakdown?.winner_count ? (
+                            <div className="mt-4 space-y-3">
+                              {breakdown.winners.map((winner) => (
+                                <div key={`${tier}-${winner.id}`} className={`rounded-xl border px-4 py-3 ${isDark ? 'border-dark-border bg-dark-bg/50' : 'border-light-border bg-white'}`}>
+                                  <div className="font-bold">{winner.full_name || 'Unknown player'}</div>
+                                  <div className="text-xs opacity-50">{winner.email || 'No email'}</div>
+                                  <div className="mt-2 text-xs opacity-70">Submitted Scores: {formatNumberSeries(winner.submitted_scores)}</div>
+                                  <div className="text-xs font-semibold text-brand-500">Matched Numbers: {formatNumberSeries(winner.matched_numbers)}</div>
+                                </div>
+                              ))}
+                            </div>
+                          ) : (
+                            <div className="mt-4 text-sm opacity-60">
+                              No players matched this tier in the current simulation.
+                              {tier === 'tier_5' && Number(breakdown?.rollover_amount || 0) > 0 ? ` Jackpot rollover: ${formatCurrencyINR(breakdown.rollover_amount)}.` : ''}
+                            </div>
+                          )}
+                        </div>
+                      </div>
                     </div>
-                    <div className="flex-grow">
-                      <div className="font-bold">{winner?.full_name || 'No eligible player'}</div>
-                      <div className="text-xs opacity-50">{winner?.email || 'N/A'}</div>
-                    </div>
-                    <div className="text-right">
-                      <div className="text-brand-500 font-bold">{formatCurrencyINR(Number(simulation.total_pool || 0) * simulation.pool_split[tier])}</div>
-                      <div className="text-[10px] opacity-40 uppercase font-bold tracking-widest">Potential Reward</div>
-                    </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
 
               <div className="mt-8 p-4 bg-amber-500/10 border border-amber-500/20 rounded-xl flex gap-3">
                 <AlertTriangle className="text-amber-500 shrink-0" size={20} />
                 <p className="text-xs text-amber-500/80 leading-relaxed">
-                  <strong>Simulation Disclaimer:</strong> These results are generated locally and have not been saved. Refreshing the page or running another simulation will generate different results unless the logic is locked.
+                  <strong>Simulation Disclaimer:</strong> These numbers and match groups are preview results only. Publishing stores the winning numbers and recomputes winners from those official numbers.
                 </p>
               </div>
 
               <button 
                 onClick={publishDraw}
-                disabled={publishing || !Object.values(simulation.winners || {}).some((winner) => Boolean(winner?.id))}
+                disabled={publishing || !simulation?.winning_numbers?.length || !simulation?.eligible_participants}
                 className="w-full mt-6 bg-gradient-to-r from-brand-600 to-emerald-600 hover:from-brand-500 hover:to-emerald-500 text-white font-bold py-4 rounded-xl flex items-center justify-center gap-2 shadow-xl shadow-brand-500/20 transition-all hover:scale-[1.01]"
               >
                 {publishing ? <Loader2 className="animate-spin" /> : <Send size={20} />}
