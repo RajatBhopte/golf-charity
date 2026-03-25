@@ -1,5 +1,6 @@
 /* eslint-disable no-unused-vars */
 import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { Link } from "react-router-dom";
 import { useForm } from "react-hook-form";
 import { motion, AnimatePresence } from "framer-motion";
@@ -19,8 +20,9 @@ import {
 import Navbar from "../components/Navbar";
 
 export default function Signup() {
-  const { signup, loginWithGoogle } = useAuth();
+  const { loginWithGoogle, login } = useAuth();
   const { isDark } = useTheme();
+  const navigate = useNavigate();
 
   const [step, setStep] = useState(1);
   const [error, setError] = useState(null);
@@ -91,7 +93,7 @@ export default function Signup() {
 
   const handleGoogleSignup = async () => {
     try {
-      const { error: authError } = await loginWithGoogle();
+      const { error: authError } = await loginWithGoogle("/subscribe");
       if (authError) throw authError;
     } catch (err) {
       setError(err.message || "Failed to sign up with Google");
@@ -125,26 +127,20 @@ export default function Signup() {
     setError(null);
 
     try {
-      const { data: authData, error: authError } = await signup(
-        formData.email,
-        formData.password,
-        {
-          full_name: formData.fullName,
-        },
-      );
-
-      if (authError) throw authError;
-
-      const userId = authData?.user?.id;
-      if (!userId) throw new Error("Failed to retrieve user ID");
-
-      await api.post("/auth/sync", {
-        id: userId,
+      await api.post("/auth/register", {
+        email: formData.email,
+        password: formData.password,
         full_name: formData.fullName,
         plan: formData.plan,
         charity_id: formData.charityId,
         charity_percentage: Number(formData.charityPercentage),
       });
+
+      const { error: loginError } = await login(
+        formData.email,
+        formData.password,
+      );
+      if (loginError) throw loginError;
 
       setStep(4);
     } catch (err) {
@@ -668,6 +664,13 @@ export default function Signup() {
                     <span>50%</span>
                     <span>100%</span>
                   </div>
+
+                  <p
+                    className={`mt-3 text-xs font-semibold ${isDark ? "text-amber-300" : "text-amber-600"}`}
+                  >
+                    Note: Your account is created as pending. Full score and
+                    draw access unlocks after successful subscription payment.
+                  </p>
                 </div>
 
                 <div className="flex gap-4">
@@ -719,24 +722,39 @@ export default function Signup() {
                 <h1
                   className={`text-3xl font-bold mb-3 tracking-tight ${isDark ? "text-white" : "text-light-text"}`}
                 >
-                  Check Your <span className="gradient-text">Email</span>
+                  Account <span className="gradient-text">Created</span>
                 </h1>
                 <p
                   className={`text-sm leading-relaxed mb-8 max-w-sm mx-auto ${isDark ? "text-gray-400" : "text-light-subtext"}`}
                 >
-                  We've sent a verification link to{" "}
-                  <strong className={isDark ? "text-white" : "text-black"}>
-                    {formData.email}
-                  </strong>
-                  . Please click the link to verify your account before logging
-                  in to complete your subscription.
+                  Your account is ready. You can activate subscription now or
+                  pay later and continue with limited access.
                 </p>
-                <Link
-                  to="/login"
-                  className="w-full btn-primary flex justify-center py-3.5"
+
+                <div className="space-y-3">
+                  <button
+                    onClick={() => navigate("/subscribe", { replace: true })}
+                    className="w-full btn-primary flex justify-center py-3.5"
+                  >
+                    Pay Now and Unlock Full Access
+                  </button>
+                  <button
+                    onClick={() => navigate("/", { replace: true })}
+                    className={`w-full py-3.5 rounded-xl border font-semibold transition-colors ${
+                      isDark
+                        ? "border-dark-border text-gray-200 hover:bg-dark-surface"
+                        : "border-light-border text-light-text hover:bg-gray-100"
+                    }`}
+                  >
+                    Pay Later (Limited Access)
+                  </button>
+                </div>
+
+                <p
+                  className={`mt-3 text-xs ${isDark ? "text-gray-500" : "text-gray-500"}`}
                 >
-                  Return to Login
-                </Link>
+                  You can activate anytime from Subscribe.
+                </p>
               </motion.div>
             )}
           </AnimatePresence>

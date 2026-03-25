@@ -152,7 +152,7 @@ export default function ScoreList({ scores = [], onEdit, onDelete, loading }) {
                         type="date"
                         value={editDate}
                         onChange={(e) => setEditDate(e.target.value)}
-                        className={`flex-1 pl-2 pr-8 py-1 text-sm rounded-lg border outline-none ${isDark ? "bg-dark-card border-dark-border [color-scheme:dark]" : "bg-white border-gray-300 [color-scheme:light]"}`}
+                        className={`score-date-input flex-1 min-w-0 pl-2 pr-10 py-1 text-xs sm:text-sm rounded-lg border outline-none ${isDark ? "bg-dark-card border-dark-border [color-scheme:dark]" : "bg-white border-gray-300 [color-scheme:light]"}`}
                       />
                       <div className="flex items-center gap-1">
                         <button

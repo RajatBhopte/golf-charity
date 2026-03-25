@@ -1070,11 +1070,9 @@ router.post(
       });
     } catch (error) {
       console.error("Ensure charity-assets bucket error:", error);
-      res
-        .status(500)
-        .json({
-          error: error.message || "Failed to prepare charity image storage",
-        });
+      res.status(500).json({
+        error: error.message || "Failed to prepare charity image storage",
+      });
     }
   },
 );
@@ -1276,11 +1274,9 @@ router.post("/draws/publish", requireAdmin, async (req, res) => {
       !Array.isArray(req.body.winning_numbers) ||
       req.body.winning_numbers.length !== SCORES_PER_DRAW
     ) {
-      return res
-        .status(400)
-        .json({
-          error: `winning_numbers must contain ${SCORES_PER_DRAW} numbers before publishing`,
-        });
+      return res.status(400).json({
+        error: `winning_numbers must contain ${SCORES_PER_DRAW} numbers before publishing`,
+      });
     }
 
     const type = settings.type === "random" ? "random" : "algorithmic";
@@ -1295,16 +1291,25 @@ router.post("/draws/publish", requireAdmin, async (req, res) => {
 
     const { data: existingDraw, error: existingDrawError } = await supabase
       .from("draws")
-      .select("id")
+      .select("id, winning_numbers")
       .eq("month_year", monthYear)
       .eq("status", "published")
       .maybeSingle();
 
     if (existingDrawError) throw existingDrawError;
     if (existingDraw) {
-      return res
-        .status(409)
-        .json({ error: "A published draw already exists for this month" });
+      const { count: winnerCount } = await supabase
+        .from("winners")
+        .select("id", { count: "exact", head: true })
+        .eq("draw_id", existingDraw.id);
+
+      return res.json({
+        message: "Draw already published for this month",
+        draw_id: existingDraw.id,
+        winner_count: winnerCount || 0,
+        winning_numbers: existingDraw.winning_numbers || [],
+        already_published: true,
+      });
     }
 
     const payload = {
@@ -1527,11 +1532,9 @@ router.put("/winners/:id", requireAdmin, async (req, res) => {
       currentWinner.verification_status !== "approved" &&
       updates.verification_status !== "approved"
     ) {
-      return res
-        .status(400)
-        .json({
-          error: "Winner must be approved before payment is marked as paid",
-        });
+      return res.status(400).json({
+        error: "Winner must be approved before payment is marked as paid",
+      });
     }
 
     const paymentStatusChanged =

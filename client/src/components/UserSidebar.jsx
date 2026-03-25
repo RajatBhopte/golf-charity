@@ -88,24 +88,50 @@ export default function UserSidebar({ activeTab, setActiveTab, unreadNotificatio
 
         {/* User Info Quick View */}
         <div className="px-6 mb-6">
-           <div className={`p-4 rounded-2xl border ${isDark ? 'bg-dark-card border-dark-border' : 'bg-gray-50 border-light-border'}`}>
-              <div className="flex items-center gap-3 mb-3">
-                 <div className="w-10 h-10 rounded-full bg-brand-500/20 flex items-center justify-center text-brand-500 font-bold">
+          {(() => {
+            const isYearly = user?.subscription_plan === 'yearly';
+            const planBorder = isYearly
+              ? 'border-amber-400/50'
+              : 'border-brand-500/40';
+            const planBg = isYearly
+              ? isDark ? 'bg-amber-500/10' : 'bg-amber-50'
+              : isDark ? 'bg-brand-500/10' : 'bg-brand-50';
+            const avatarBg = isYearly
+              ? 'bg-amber-400/20 text-amber-400'
+              : 'bg-brand-500/20 text-brand-500';
+            const supporterColor = isYearly ? 'text-amber-400' : 'text-brand-400';
+            const supporterLabel = isYearly ? 'Yearly Supporter' : 'Monthly Supporter';
+            const planBadgeBg = isYearly
+              ? 'bg-amber-400/15 text-amber-400'
+              : 'bg-brand-500/15 text-brand-400';
+
+            return (
+              <div className={`p-4 rounded-2xl border ${planBg} ${planBorder}`}>
+                <div className="flex items-center gap-3 mb-3">
+                  <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold ${avatarBg}`}>
                     {user?.full_name?.[0] || user?.email?.[0]?.toUpperCase()}
-                 </div>
-                 <div className="overflow-hidden">
+                  </div>
+                  <div className="overflow-hidden">
                     <p className="text-sm font-bold truncate">{user?.full_name || 'Golfer'}</p>
-                    <p className="text-[10px] text-gray-500 truncate uppercase tracking-tighter">{user?.subscription_plan === 'yearly' ? 'Yearly Supporter' : 'Monthly Supporter'}</p>
-                 </div>
-              </div>
-              <div className="flex items-center justify-between text-[10px] font-bold uppercase tracking-wider">
-                 <span className="text-gray-500">Subscription</span>
-                 <span className={user?.subscription_status === 'active' ? 'text-green-500' : 'text-yellow-500'}>
+                    <p className={`text-[10px] truncate uppercase tracking-tighter font-semibold ${supporterColor}`}>
+                      {supporterLabel}
+                    </p>
+                  </div>
+                  <div className={`ml-auto shrink-0 text-[9px] font-bold uppercase px-2 py-0.5 rounded-full ${planBadgeBg}`}>
+                    {isYearly ? 'Yearly' : 'Monthly'}
+                  </div>
+                </div>
+                <div className="flex items-center justify-between text-[10px] font-bold uppercase tracking-wider">
+                  <span className="text-gray-500">Subscription</span>
+                  <span className={user?.subscription_status === 'active' ? 'text-green-500' : 'text-yellow-500'}>
                     {user?.subscription_status || 'Inactive'}
-                 </span>
+                  </span>
+                </div>
               </div>
-           </div>
+            );
+          })()}
         </div>
+
 
         {/* Navigation Section */}
         <nav className="flex-grow px-4 pb-6 space-y-1 overflow-y-auto custom-scrollbar">

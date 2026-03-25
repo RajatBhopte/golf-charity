@@ -11,6 +11,8 @@ import {
   Bell,
   Upload,
   Loader2,
+  X,
+  Lock,
 } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import { useTheme } from "../context/ThemeContext";
@@ -34,7 +36,7 @@ const formatNumberSeries = (numbers = []) =>
 import UserSidebar from "../components/UserSidebar";
 
 export default function Dashboard() {
-  const { user, session } = useAuth();
+  const { user, session, refreshUserData } = useAuth();
   const { isDark } = useTheme();
   const [activeTab, setActiveTab] = useState("overview");
   const [charities, setCharities] = useState([]);
@@ -44,6 +46,12 @@ export default function Dashboard() {
   const [metaLoading, setMetaLoading] = useState(true);
   const [dashboardError, setDashboardError] = useState("");
   const [uploadingWinnerId, setUploadingWinnerId] = useState(null);
+  const [selectedCharityId, setSelectedCharityId] = useState("");
+  const [selectedCharityPercentage, setSelectedCharityPercentage] =
+    useState(10);
+  const [savingImpactSettings, setSavingImpactSettings] = useState(false);
+  const [impactSuccessMsg, setImpactSuccessMsg] = useState("");
+  const isActiveSubscriber = user?.subscription_status === "active";
 
   const charityPercentage = Number(user?.charity_percentage || 10);
   const subscriptionPlan = user?.subscription_plan || "monthly";
@@ -61,8 +69,10 @@ export default function Dashboard() {
   } = useScores();
 
   useEffect(() => {
-    fetchScores();
-  }, [fetchScores]);
+    if (isActiveSubscriber) {
+      fetchScores();
+    }
+  }, [fetchScores, isActiveSubscriber]);
 
   useEffect(() => {
     const fetchDashboardMeta = async () => {
@@ -71,16 +81,22 @@ export default function Dashboard() {
       setDashboardError("");
 
       try {
-        const [charityResult, winsResult, notificationsResult] =
-          await Promise.allSettled([
-            fetch(buildApiUrl("/charities")),
+        const requests = [fetch(buildApiUrl("/charities"))];
+        if (isActiveSubscriber) {
+          requests.push(
             fetch(buildApiUrl("/draws/my-wins"), {
               headers: { Authorization: `Bearer ${session.access_token}` },
             }),
+          );
+          requests.push(
             fetch(buildApiUrl("/draws/notifications"), {
               headers: { Authorization: `Bearer ${session.access_token}` },
             }),
-          ]);
+          );
+        }
+
+        const [charityResult, winsResult, notificationsResult] =
+          await Promise.allSettled(requests);
 
         const loadErrors = [];
         if (charityResult.status === "fulfilled") {
@@ -96,14 +112,14 @@ export default function Dashboard() {
             loadErrors.push(charityPayload.error || "Failed to load charities");
         }
 
-        if (winsResult.status === "fulfilled") {
+        if (isActiveSubscriber && winsResult?.status === "fulfilled") {
           const winsPayload = await winsResult.value.json();
           if (winsResult.value.ok)
             setWins(Array.isArray(winsPayload) ? winsPayload : []);
           else loadErrors.push(winsPayload.error || "Failed to load winners");
         }
 
-        if (notificationsResult.status === "fulfilled") {
+        if (isActiveSubscriber && notificationsResult?.status === "fulfilled") {
           const notificationsPayload = await notificationsResult.value.json();
           if (notificationsResult.value.ok)
             setNotifications(
@@ -123,7 +139,7 @@ export default function Dashboard() {
       }
     };
     fetchDashboardMeta();
-  }, [session]);
+  }, [session, isActiveSubscriber]);
 
   const chosenCharity = useMemo(
     () =>
@@ -133,9 +149,78 @@ export default function Dashboard() {
     [charities, featuredCharity, user?.charity_id],
   );
 
-  const drawTickets = scores.length >= 5 ? 1 : 0;
+  const drawTickets = isActiveSubscriber && scores.length >= 5 ? 1 : 0;
   const unreadNotifications = notifications.filter((n) => !n.is_read).length;
   const latestFiveScores = scores.slice(0, 5);
+  const scoreCompletion = Math.min(scores.length, 5);
+  const scoreCompletionPct = Math.round((scoreCompletion / 5) * 100);
+  const scoresToUnlock = Math.max(0, 5 - scoreCompletion);
+  const impactThisCycle = Math.round(
+    (subscriptionPrice * charityPercentage) / 100,
+  );
+  const projectedYearlyImpact =
+    subscriptionPlan === "yearly" ? impactThisCycle : impactThisCycle * 12;
+  const nextDrawDate = useMemo(() => {
+    const now = new Date();
+    return new Date(
+      now.getFullYear(),
+      now.getMonth() + 1,
+      1,
+    ).toLocaleDateString(undefined, { month: "short", day: "numeric" });
+  }, []);
+
+  const firstScoreDate = useMemo(() => {
+    if (!scores.length) return "No scores yet";
+    const earliest = scores.reduce((previous, current) => {
+      const prevTime = new Date(previous.played_date).getTime();
+      const currTime = new Date(current.played_date).getTime();
+      return currTime < prevTime ? current : previous;
+    });
+    return new Date(earliest.played_date).toLocaleDateString(undefined, {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+    });
+  }, [scores]);
+
+  useEffect(() => {
+    setSelectedCharityId(user?.charity_id || "");
+    setSelectedCharityPercentage(Number(user?.charity_percentage || 10));
+  }, [user?.charity_id, user?.charity_percentage]);
+
+  const saveImpactSettings = async () => {
+    if (!session?.access_token) return;
+
+    try {
+      setSavingImpactSettings(true);
+      setDashboardError("");
+      setImpactSuccessMsg("");
+
+      const response = await fetch(buildApiUrl("/auth/me"), {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify({
+          charity_id: selectedCharityId || null,
+          charity_percentage: Number(selectedCharityPercentage),
+        }),
+      });
+
+      const payload = await response.json();
+      if (!response.ok) {
+        throw new Error(payload.error || "Failed to update charity settings");
+      }
+
+      await refreshUserData();
+      setImpactSuccessMsg("Charity preferences updated successfully.");
+    } catch (error) {
+      setDashboardError(error.message || "Failed to update charity settings");
+    } finally {
+      setSavingImpactSettings(false);
+    }
+  };
 
   const markNotificationRead = async (notificationId) => {
     if (!session?.access_token) return;
@@ -242,6 +327,33 @@ export default function Dashboard() {
             </div>
           </header>
 
+          {!isActiveSubscriber && (
+            <div
+              className={`mb-8 rounded-2xl border px-6 py-5 ${
+                isDark
+                  ? "border-amber-500/30 bg-amber-500/10"
+                  : "border-amber-400/40 bg-amber-50"
+              }`}
+            >
+              <p className="text-sm font-black uppercase tracking-[0.14em] text-amber-500 mb-1">
+                Limited Access Mode
+              </p>
+              <p
+                className={`text-sm ${isDark ? "text-gray-300" : "text-slate-700"}`}
+              >
+                You can explore the dashboard and manage your charity settings.
+                Score entry, draw history, and notifications unlock after
+                subscription activation.
+              </p>
+              <button
+                onClick={() => window.location.assign("/subscribe")}
+                className="mt-4 btn-primary !py-2.5 !px-5 text-xs uppercase tracking-[0.14em]"
+              >
+                Activate Subscription
+              </button>
+            </div>
+          )}
+
           {dashboardError && (
             <div className="mb-8 rounded-2xl border border-red-500/20 bg-red-500/10 px-6 py-4 text-sm text-red-500 animate-slide-up flex items-center justify-between">
               <span>{dashboardError}</span>
@@ -261,34 +373,48 @@ export default function Dashboard() {
                 <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6">
                   <MetricCard
                     isDark={isDark}
-                    title={subscriptionLabel}
+                    title={
+                      isActiveSubscriber ? subscriptionLabel : "Subscription"
+                    }
                     icon={CreditCard}
                     iconClass="bg-blue-500/10 text-blue-500"
-                    value={formatCurrencyINR(subscriptionPrice)}
+                    value={
+                      isActiveSubscriber
+                        ? formatCurrencyINR(subscriptionPrice)
+                        : "Pending"
+                    }
                     caption={
-                      subscriptionPlan === "yearly"
-                        ? "Annual plan"
-                        : "Monthly billing"
+                      isActiveSubscriber
+                        ? subscriptionPlan === "yearly"
+                          ? "Annual plan"
+                          : "Monthly billing"
+                        : "Activate to start billing"
                     }
                   />
                   <MetricCard
                     isDark={isDark}
-                    title="Impact Rate"
+                    title={isActiveSubscriber ? "Impact Rate" : "Chosen Impact"}
                     icon={Heart}
                     iconClass="bg-rose-500/10 text-rose-500"
                     value={`${charityPercentage}%`}
-                    caption="of every entry fee goes to charity"
+                    caption={
+                      isActiveSubscriber
+                        ? "of every entry fee goes to charity"
+                        : "Set now, applied after activation"
+                    }
                   />
                   <MetricCard
                     isDark={isDark}
                     title="Active Tickets"
                     icon={Ticket}
                     iconClass="bg-amber-500/10 text-amber-500"
-                    value={String(drawTickets)}
+                    value={isActiveSubscriber ? String(drawTickets) : "Locked"}
                     caption={
-                      drawTickets
-                        ? "Eligible for next draw"
-                        : "Log 5 scores to enter"
+                      isActiveSubscriber
+                        ? drawTickets
+                          ? "Eligible for next draw"
+                          : "Log 5 scores to enter"
+                        : "Unlock after subscription"
                     }
                   />
                   <MetricCard
@@ -296,8 +422,16 @@ export default function Dashboard() {
                     title="Live Alerts"
                     icon={Bell}
                     iconClass="bg-brand-500/10 text-brand-500"
-                    value={String(unreadNotifications)}
-                    caption="Unread system updates"
+                    value={
+                      isActiveSubscriber
+                        ? String(unreadNotifications)
+                        : "Locked"
+                    }
+                    caption={
+                      isActiveSubscriber
+                        ? "Unread system updates"
+                        : "Unlock after subscription"
+                    }
                   />
                 </div>
 
@@ -308,41 +442,55 @@ export default function Dashboard() {
                       scores={latestFiveScores}
                       loading={scoresLoading}
                     />
-                    <button
-                      onClick={() => setActiveTab("scores")}
-                      className="w-full py-4 rounded-2xl border border-dashed border-gray-300 dark:border-dark-border text-sm font-bold uppercase tracking-widest hover:bg-brand-500/5 hover:text-brand-500 transition-all"
-                    >
-                      View and manage score history ({scores.length})
-                    </button>
+                    {isActiveSubscriber ? (
+                      <button
+                        onClick={() => setActiveTab("scores")}
+                        className="w-full py-4 rounded-2xl border border-dashed border-gray-300 dark:border-dark-border text-sm font-bold uppercase tracking-widest hover:bg-brand-500/5 hover:text-brand-500 transition-all"
+                      >
+                        View and manage score history ({scores.length})
+                      </button>
+                    ) : (
+                      <AccessLockedPanel isDark={isDark} compact />
+                    )}
                   </div>
                   <div className="xl:col-span-2">
-                    <ScoreEntry onAddScore={addScore} loading={scoresLoading} />
+                    {isActiveSubscriber ? (
+                      <ScoreEntry
+                        onAddScore={addScore}
+                        loading={scoresLoading}
+                      />
+                    ) : (
+                      <AccessLockedPanel isDark={isDark} />
+                    )}
                   </div>
                 </div>
               </div>
             )}
 
-            {activeTab === "scores" && (
-              <div className="grid grid-cols-1 xl:grid-cols-3 gap-8">
-                <div className="xl:col-span-2">
-                  <ScoreList
-                    scores={scores}
-                    onEdit={editScore}
-                    onDelete={deleteScore}
-                    loading={scoresLoading}
-                  />
+            {activeTab === "scores" &&
+              (isActiveSubscriber ? (
+                <div className="grid grid-cols-1 xl:grid-cols-3 gap-8">
+                  <div className="xl:col-span-2">
+                    <ScoreList
+                      scores={scores}
+                      onEdit={editScore}
+                      onDelete={deleteScore}
+                      loading={scoresLoading}
+                    />
+                  </div>
+                  <div className="xl:col-span-1">
+                    <ScoreEntry onAddScore={addScore} loading={scoresLoading} />
+                  </div>
                 </div>
-                <div className="xl:col-span-1">
-                  <ScoreEntry onAddScore={addScore} loading={scoresLoading} />
-                </div>
-              </div>
-            )}
+              ) : (
+                <AccessLockedPanel isDark={isDark} />
+              ))}
 
             {activeTab === "impact" && (
               <section
                 className={`glass-card rounded-2xl border overflow-hidden ${isDark ? "bg-dark-card border-dark-border" : "bg-white border-light-border shadow-sm"}`}
               >
-                <div className="p-8">
+                <div className="p-5 sm:p-6">
                   {metaLoading ? (
                     <div className="flex justify-center py-20">
                       <Loader2
@@ -351,82 +499,148 @@ export default function Dashboard() {
                       />
                     </div>
                   ) : chosenCharity ? (
-                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-12">
-                      <div>
-                        {chosenCharity.image_url && (
-                          <div className="mb-6 overflow-hidden rounded-3xl border border-white/5">
-                            <img
-                              src={chosenCharity.image_url}
-                              alt={chosenCharity.name}
-                              className="h-64 lg:h-80 w-full object-cover"
-                            />
-                          </div>
-                        )}
-                        <div className="flex items-center gap-4 mb-6">
-                          <div className="w-14 h-14 rounded-2xl bg-brand-500/10 flex items-center justify-center text-brand-500 border border-brand-500/20">
-                            {chosenCharity.logo_url ? (
+                    <div className="mx-auto w-full max-w-3xl space-y-4">
+                      <article
+                        className={`rounded-2xl border overflow-hidden ${
+                          isDark
+                            ? "bg-[#0f1a34] border-emerald-500/40"
+                            : "bg-white border-emerald-300 shadow-sm"
+                        }`}
+                      >
+                        <div className="relative border-b border-black/10">
+                          <div className="aspect-[16/7] sm:aspect-[16/6]">
+                            {chosenCharity.image_url ? (
                               <img
-                                src={chosenCharity.logo_url}
-                                className="w-8 h-8 object-contain"
+                                src={chosenCharity.image_url}
+                                alt={chosenCharity.name}
+                                className="h-full w-full object-cover"
                               />
                             ) : (
-                              <Heart size={24} />
+                              <div
+                                className={`h-full w-full ${
+                                  isDark
+                                    ? "bg-[linear-gradient(130deg,#1d3b66_0%,#355f94_50%,#264b79_100%)]"
+                                    : "bg-[linear-gradient(130deg,#bfdbfe_0%,#93c5fd_60%,#bfdbfe_100%)]"
+                                }`}
+                              />
                             )}
                           </div>
-                          <h3 className="font-black text-2xl uppercase tracking-tight">
-                            {chosenCharity.name}
-                          </h3>
-                        </div>
-                        <p
-                          className={`text-lg leading-relaxed mb-8 ${isDark ? "text-gray-400" : "text-light-subtext"}`}
-                        >
-                          {chosenCharity.description}
-                        </p>
-                      </div>
-                      <div className="space-y-8">
-                        <div className="bg-brand-500 p-8 rounded-3xl text-white shadow-xl shadow-brand-500/20">
-                          <p className="text-xs font-bold uppercase tracking-widest opacity-80 mb-2">
-                            Community Impact
-                          </p>
-                          <p className="text-4xl font-black mb-6">
-                            {formatCurrencyINR(chosenCharity.total_raised || 0)}{" "}
-                            <span className="text-lg font-bold opacity-80 italic">
-                              raised
-                            </span>
-                          </p>
-                          <div className="w-full h-3 bg-black/20 rounded-full overflow-hidden mb-2">
-                            <div className="h-full bg-white w-[75%] rounded-full" />
-                          </div>
-                          <p className="text-[10px] font-bold uppercase opacity-60">
-                            Crowdfund Progress for current initiative
-                          </p>
+                          <div className="absolute inset-0 bg-black/5" />
                         </div>
 
-                        {chosenCharity.upcoming_events?.length > 0 && (
-                          <div
-                            className={`p-6 rounded-3xl border ${isDark ? "bg-dark-bg/60 border-dark-border" : "bg-gray-50 border-light-border"}`}
-                          >
-                            <h4 className="font-black text-sm uppercase tracking-widest mb-4 flex items-center gap-2">
-                              <ArrowRight
-                                className="text-brand-500"
-                                size={16}
-                              />{" "}
-                              Upcoming Events
-                            </h4>
-                            <ul className="space-y-3">
-                              {chosenCharity.upcoming_events.map((e) => (
-                                <li
-                                  key={e}
-                                  className="flex items-center gap-3 text-sm font-semibold"
-                                >
-                                  <div className="w-1.5 h-1.5 rounded-full bg-brand-500" />{" "}
-                                  {e}
-                                </li>
-                              ))}
-                            </ul>
+                        <div className="px-4 py-3 sm:px-5 sm:py-4">
+                          <div className="flex items-center justify-between gap-3">
+                            <h3 className="text-lg sm:text-xl font-black tracking-tight truncate">
+                              {chosenCharity.name}
+                            </h3>
+                            <p
+                              className={`text-lg sm:text-xl font-black shrink-0 ${
+                                isDark ? "text-emerald-400" : "text-emerald-600"
+                              }`}
+                            >
+                              {formatCurrencyINR(
+                                chosenCharity.total_raised || 0,
+                              )}
+                            </p>
                           </div>
+                          <p
+                            className={`mt-1 text-[11px] uppercase tracking-[0.14em] font-bold ${
+                              isDark ? "text-gray-500" : "text-gray-500"
+                            }`}
+                          >
+                            Community total raised
+                          </p>
+                        </div>
+                      </article>
+
+                      <article
+                        className={`rounded-2xl border p-4 ${
+                          isDark
+                            ? "bg-dark-card border-dark-border"
+                            : "bg-white border-light-border shadow-sm"
+                        }`}
+                      >
+                        <h4 className="font-black text-xs uppercase tracking-[0.14em] mb-3 flex items-center gap-2">
+                          <Heart className="text-brand-500" size={15} />
+                          My Charity Settings
+                        </h4>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3">
+                          <div>
+                            <label
+                              className={`text-[11px] font-bold uppercase tracking-[0.12em] ${isDark ? "text-gray-500" : "text-gray-500"}`}
+                            >
+                              Selected Charity
+                            </label>
+                            <select
+                              value={selectedCharityId}
+                              onChange={(e) =>
+                                setSelectedCharityId(e.target.value)
+                              }
+                              className={`mt-1 w-full rounded-xl border px-3 py-2.5 text-sm font-semibold outline-none ${
+                                isDark
+                                  ? "bg-[#0a132b] border-dark-border text-white"
+                                  : "bg-white border-light-border text-slate-800"
+                              }`}
+                            >
+                              <option value="">No charity selected</option>
+                              {charities.map((charity) => (
+                                <option key={charity.id} value={charity.id}>
+                                  {charity.name}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+
+                          <div>
+                            <label
+                              className={`text-[11px] font-bold uppercase tracking-[0.12em] ${isDark ? "text-gray-500" : "text-gray-500"}`}
+                            >
+                              Contribution %
+                            </label>
+                            <input
+                              type="number"
+                              min="10"
+                              max="100"
+                              value={selectedCharityPercentage}
+                              onChange={(e) =>
+                                setSelectedCharityPercentage(
+                                  Math.max(
+                                    10,
+                                    Math.min(100, Number(e.target.value) || 10),
+                                  ),
+                                )
+                              }
+                              className={`mt-1 w-full rounded-xl border px-3 py-2.5 text-sm font-semibold outline-none ${
+                                isDark
+                                  ? "bg-[#0a132b] border-dark-border text-white"
+                                  : "bg-white border-light-border text-slate-800"
+                              }`}
+                            />
+                          </div>
+                        </div>
+
+                        <button
+                          onClick={saveImpactSettings}
+                          disabled={savingImpactSettings}
+                          className="w-full sm:w-auto btn-primary !py-2.5 !px-5 text-xs uppercase tracking-[0.14em] disabled:opacity-60"
+                        >
+                          {savingImpactSettings
+                            ? "Saving..."
+                            : "Update Charity"}
+                        </button>
+                        {impactSuccessMsg && (
+                          <p className="mt-2 text-xs text-green-500 font-semibold">
+                            {impactSuccessMsg}
+                          </p>
                         )}
-                      </div>
+                        <p
+                          className={`mt-2 text-[11px] ${isDark ? "text-gray-500" : "text-gray-500"}`}
+                        >
+                          You can switch charity and adjust contribution
+                          percentage here (minimum 10%).
+                        </p>
+                      </article>
                     </div>
                   ) : (
                     <p className="text-center py-20 text-gray-500">
@@ -437,208 +651,246 @@ export default function Dashboard() {
               </section>
             )}
 
-            {activeTab === "wins" && (
-              <div className="space-y-6">
-                {metaLoading ? (
-                  <div className="flex justify-center py-20">
-                    <Loader2
-                      className="animate-spin text-brand-500"
-                      size={40}
-                    />
-                  </div>
-                ) : wins.length === 0 ? (
-                  <div className="text-center py-24 bg-dark-card/20 rounded-3xl border border-dashed border-dark-border">
-                    <Trophy className="mx-auto text-gray-700 mb-4" size={48} />
-                    <h3 className="text-xl font-bold mb-2">
-                      No wins recorded yet
-                    </h3>
-                    <p className="text-gray-500">
-                      Log scores to enter future draws. Your winning tickets
-                      will appear here.
-                    </p>
-                  </div>
-                ) : (
-                  wins.map((win) => (
-                    <div
-                      key={win.id}
-                      className={`p-8 rounded-3xl border ${isDark ? "bg-dark-card border-dark-border" : "bg-white border-light-border shadow-sm"}`}
-                    >
-                      <div className="flex flex-col xl:flex-row justify-between gap-8">
-                        <div className="space-y-4">
-                          <div className="flex items-center gap-3">
-                            <div className="px-3 py-1 rounded-full bg-brand-500 text-white text-[10px] font-black uppercase tracking-widest">
-                              {win.draws?.month_year
-                                ? new Date(
-                                    win.draws.month_year,
-                                  ).toLocaleDateString([], {
-                                    month: "long",
-                                    year: "numeric",
-                                  })
-                                : "Win"}
-                            </div>
-                            <StatusPill
-                              label={win.verification_status}
-                              tone={
-                                win.verification_status === "approved"
-                                  ? "green"
-                                  : win.verification_status === "rejected"
-                                    ? "red"
-                                    : "amber"
-                              }
-                            />
-                            <StatusPill
-                              label={win.payment_status}
-                              tone={
-                                win.payment_status === "paid" ? "blue" : "slate"
-                              }
-                            />
-                          </div>
-                          <h3 className="text-3xl font-black">
-                            {formatCurrencyINR(win.amount || 0)}
-                          </h3>
-                          <p className="text-gray-500 text-sm italic">
-                            {win.prize_tier}-number match
-                          </p>
-
-                          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 xl:pt-4">
-                            <WinBadge
-                              label="Winning Numbers"
-                              value={win.draws?.winning_numbers?.join(", ")}
-                            />
-                            <WinBadge
-                              label="Your Match"
-                              value={win.matched_numbers?.join(", ")}
-                              color="text-brand-500"
-                            />
-                            <WinBadge
-                              label="Ticket Hash"
-                              value={win.id?.slice(0, 8)}
-                            />
-                          </div>
-                        </div>
-
-                        <div className="xl:w-80 space-y-4 pt-4 xl:pt-0">
-                          <p className="text-xs font-bold uppercase tracking-widest text-gray-500">
-                            Verification Action
-                          </p>
-                          {win.rejection_reason && (
-                            <p className="text-sm font-bold text-red-500">
-                              {win.rejection_reason}
-                            </p>
-                          )}
-
-                          <label
-                            className={`w-full flex items-center justify-center gap-2 px-6 py-4 rounded-2xl text-sm font-black uppercase tracking-widest cursor-pointer transition-all ${
-                              isDark
-                                ? "bg-brand-500 hover:bg-brand-600 text-white shadow-lg shadow-brand-500/20"
-                                : "bg-black text-white hover:bg-gray-800"
-                            }`}
-                          >
-                            {uploadingWinnerId === win.id ? (
-                              <Loader2 className="animate-spin" size={18} />
-                            ) : win.screenshot_url ? (
-                              <CheckCircle2 size={18} />
-                            ) : (
-                              <Upload size={18} />
-                            )}
-                            {win.screenshot_url
-                              ? "Update Proof"
-                              : "Upload Proof"}
-                            <input
-                              type="file"
-                              accept="image/*"
-                              className="hidden"
-                              disabled={uploadingWinnerId === win.id}
-                              onChange={(e) =>
-                                e.target.files?.[0] &&
-                                submitProof(win.id, e.target.files[0])
-                              }
-                            />
-                          </label>
-
-                          {win.proof_signed_url && (
-                            <a
-                              href={win.proof_signed_url}
-                              target="_blank"
-                              rel="noreferrer"
-                              className="block text-center text-xs font-bold text-gray-500 hover:text-brand-500 underline decoration-dotted underline-offset-4"
-                            >
-                              View Current Proof
-                            </a>
-                          )}
-                        </div>
-                      </div>
+            {activeTab === "wins" &&
+              (isActiveSubscriber ? (
+                <div className="space-y-6">
+                  {metaLoading ? (
+                    <div className="flex justify-center py-20">
+                      <Loader2
+                        className="animate-spin text-brand-500"
+                        size={40}
+                      />
                     </div>
-                  ))
-                )}
-              </div>
-            )}
+                  ) : wins.length === 0 ? (
+                    <div className="text-center py-24 bg-dark-card/20 rounded-3xl border border-dashed border-dark-border">
+                      <Trophy
+                        className="mx-auto text-gray-700 mb-4"
+                        size={48}
+                      />
+                      <h3 className="text-xl font-bold mb-2">
+                        No wins recorded yet
+                      </h3>
+                      <p className="text-gray-500">
+                        Log scores to enter future draws. Your winning tickets
+                        will appear here.
+                      </p>
+                    </div>
+                  ) : (
+                    wins.map((win) => (
+                      <div
+                        key={win.id}
+                        className={`p-8 rounded-3xl border ${isDark ? "bg-dark-card border-dark-border" : "bg-white border-light-border shadow-sm"}`}
+                      >
+                        <div className="flex flex-col xl:flex-row justify-between gap-8">
+                          <div className="space-y-4">
+                            <div className="flex items-center gap-3">
+                              <div className="px-3 py-1 rounded-full bg-brand-500 text-white text-[10px] font-black uppercase tracking-widest">
+                                {win.draws?.month_year
+                                  ? new Date(
+                                      win.draws.month_year,
+                                    ).toLocaleDateString([], {
+                                      month: "long",
+                                      year: "numeric",
+                                    })
+                                  : "Win"}
+                              </div>
+                              <StatusPill
+                                label={win.verification_status}
+                                tone={
+                                  win.verification_status === "approved"
+                                    ? "green"
+                                    : win.verification_status === "rejected"
+                                      ? "red"
+                                      : "amber"
+                                }
+                              />
+                              <StatusPill
+                                label={win.payment_status}
+                                tone={
+                                  win.payment_status === "paid"
+                                    ? "blue"
+                                    : "slate"
+                                }
+                              />
+                            </div>
+                            <h3 className="text-3xl font-black">
+                              {formatCurrencyINR(win.amount || 0)}
+                            </h3>
+                            <p className="text-gray-500 text-sm italic">
+                              {win.prize_tier}-number match
+                            </p>
 
-            {activeTab === "notifications" && (
-              <div className="max-w-4xl space-y-4">
-                {metaLoading ? (
-                  <div className="flex justify-center py-20">
-                    <Loader2
-                      className="animate-spin text-brand-500"
-                      size={40}
-                    />
-                  </div>
-                ) : notifications.length === 0 ? (
-                  <div className="text-center py-24 bg-dark-card/20 rounded-3xl border border-dashed border-dark-border">
-                    <Bell
-                      className="mx-auto text-gray-700 mb-4 opacity-50"
-                      size={48}
-                    />
-                    <p className="text-gray-500">
-                      Inbox is empty. We will notify you here about results.
-                    </p>
-                  </div>
-                ) : (
-                  notifications.map((n) => (
-                    <button
-                      key={n.id}
-                      onClick={() =>
-                        !n.is_read &&
-                        typeof n.id === "string" &&
-                        !n.id.startsWith("local-") &&
-                        markNotificationRead(n.id)
-                      }
-                      className={`w-full text-left p-6 rounded-2xl border transition-all ${
-                        n.is_read
-                          ? isDark
-                            ? "bg-dark-card/40 border-dark-border opacity-70"
-                            : "bg-gray-50 border-light-border"
-                          : "bg-brand-500/5 border-brand-500/30 shadow-lg shadow-brand-500/5"
-                      }`}
-                    >
-                      <div className="flex items-start justify-between gap-4">
-                        <div className="space-y-1">
-                          <div className="font-black uppercase tracking-tight text-lg">
-                            {n.title || "System Alert"}
+                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 xl:pt-4">
+                              <WinBadge
+                                label="Winning Numbers"
+                                value={win.draws?.winning_numbers?.join(", ")}
+                              />
+                              <WinBadge
+                                label="Your Match"
+                                value={win.matched_numbers?.join(", ")}
+                                color="text-brand-500"
+                              />
+                              <WinBadge
+                                label="Ticket Hash"
+                                value={win.id?.slice(0, 8)}
+                              />
+                            </div>
                           </div>
-                          <p
-                            className={`text-sm ${isDark ? "text-gray-400" : "text-light-subtext"}`}
-                          >
-                            {n.message}
-                          </p>
-                          <p className="text-[10px] font-bold text-gray-500 pt-2 uppercase tracking-widest">
-                            {n.created_at
-                              ? new Date(n.created_at).toLocaleString()
-                              : "Recent"}
-                          </p>
+
+                          <div className="xl:w-80 space-y-4 pt-4 xl:pt-0">
+                            <p className="text-xs font-bold uppercase tracking-widest text-gray-500">
+                              Verification Action
+                            </p>
+                            {win.rejection_reason && (
+                              <p className="text-sm font-bold text-red-500">
+                                {win.rejection_reason}
+                              </p>
+                            )}
+
+                            <label
+                              className={`w-full flex items-center justify-center gap-2 px-6 py-4 rounded-2xl text-sm font-black uppercase tracking-widest cursor-pointer transition-all ${
+                                isDark
+                                  ? "bg-brand-500 hover:bg-brand-600 text-white shadow-lg shadow-brand-500/20"
+                                  : "bg-black text-white hover:bg-gray-800"
+                              }`}
+                            >
+                              {uploadingWinnerId === win.id ? (
+                                <Loader2 className="animate-spin" size={18} />
+                              ) : win.screenshot_url ? (
+                                <CheckCircle2 size={18} />
+                              ) : (
+                                <Upload size={18} />
+                              )}
+                              {win.screenshot_url
+                                ? "Update Proof"
+                                : "Upload Proof"}
+                              <input
+                                type="file"
+                                accept="image/*"
+                                className="hidden"
+                                disabled={uploadingWinnerId === win.id}
+                                onChange={(e) =>
+                                  e.target.files?.[0] &&
+                                  submitProof(win.id, e.target.files[0])
+                                }
+                              />
+                            </label>
+
+                            {win.proof_signed_url && (
+                              <a
+                                href={win.proof_signed_url}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="block text-center text-xs font-bold text-gray-500 hover:text-brand-500 underline decoration-dotted underline-offset-4"
+                              >
+                                View Current Proof
+                              </a>
+                            )}
+                          </div>
                         </div>
-                        {!n.is_read && (
-                          <div className="w-3 h-3 rounded-full bg-brand-500 shadow-[0_0_10px_rgba(20,184,166,0.5)]" />
-                        )}
                       </div>
-                    </button>
-                  ))
-                )}
-              </div>
-            )}
+                    ))
+                  )}
+                </div>
+              ) : (
+                <AccessLockedPanel isDark={isDark} />
+              ))}
+
+            {activeTab === "notifications" &&
+              (isActiveSubscriber ? (
+                <div className="max-w-4xl space-y-4">
+                  {metaLoading ? (
+                    <div className="flex justify-center py-20">
+                      <Loader2
+                        className="animate-spin text-brand-500"
+                        size={40}
+                      />
+                    </div>
+                  ) : notifications.length === 0 ? (
+                    <div className="text-center py-24 bg-dark-card/20 rounded-3xl border border-dashed border-dark-border">
+                      <Bell
+                        className="mx-auto text-gray-700 mb-4 opacity-50"
+                        size={48}
+                      />
+                      <p className="text-gray-500">
+                        Inbox is empty. We will notify you here about results.
+                      </p>
+                    </div>
+                  ) : (
+                    notifications.map((n) => (
+                      <button
+                        key={n.id}
+                        onClick={() =>
+                          !n.is_read &&
+                          typeof n.id === "string" &&
+                          !n.id.startsWith("local-") &&
+                          markNotificationRead(n.id)
+                        }
+                        className={`w-full text-left p-6 rounded-2xl border transition-all ${
+                          n.is_read
+                            ? isDark
+                              ? "bg-dark-card/40 border-dark-border opacity-70"
+                              : "bg-gray-50 border-light-border"
+                            : "bg-brand-500/5 border-brand-500/30 shadow-lg shadow-brand-500/5"
+                        }`}
+                      >
+                        <div className="flex items-start justify-between gap-4">
+                          <div className="space-y-1">
+                            <div className="font-black uppercase tracking-tight text-lg">
+                              {n.title || "System Alert"}
+                            </div>
+                            <p
+                              className={`text-sm ${isDark ? "text-gray-400" : "text-light-subtext"}`}
+                            >
+                              {n.message}
+                            </p>
+                            <p className="text-[10px] font-bold text-gray-500 pt-2 uppercase tracking-widest">
+                              {n.created_at
+                                ? new Date(n.created_at).toLocaleString()
+                                : "Recent"}
+                            </p>
+                          </div>
+                          {!n.is_read && (
+                            <div className="w-3 h-3 rounded-full bg-brand-500 shadow-[0_0_10px_rgba(20,184,166,0.5)]" />
+                          )}
+                        </div>
+                      </button>
+                    ))
+                  )}
+                </div>
+              ) : (
+                <AccessLockedPanel isDark={isDark} />
+              ))}
           </div>
         </div>
       </main>
+    </div>
+  );
+}
+
+function AccessLockedPanel({ isDark, compact = false }) {
+  return (
+    <div
+      className={`rounded-2xl border p-6 ${compact ? "" : "min-h-[260px]"} flex flex-col items-start justify-center gap-3 ${
+        isDark
+          ? "bg-dark-card border-dark-border"
+          : "bg-white border-light-border shadow-sm"
+      }`}
+    >
+      <div className="w-10 h-10 rounded-xl bg-amber-500/15 text-amber-500 flex items-center justify-center">
+        <Lock size={18} />
+      </div>
+      <h3 className="text-lg font-black">Locked Until Subscription</h3>
+      <p className={`text-sm ${isDark ? "text-gray-400" : "text-gray-600"}`}>
+        You can explore this dashboard section now. Activate your subscription
+        to unlock score management, winner history, and notifications.
+      </p>
+      <a
+        href="/subscribe"
+        className="inline-flex items-center gap-2 text-xs font-black uppercase tracking-[0.14em] text-brand-500 hover:text-brand-400"
+      >
+        Go to Subscribe <ArrowRight size={14} />
+      </a>
     </div>
   );
 }
@@ -666,6 +918,28 @@ function MetricCard({ title, icon: Icon, iconClass, value, caption, isDark }) {
       >
         {caption}
       </p>
+    </div>
+  );
+}
+
+function ImpactMiniCard({ isDark, label, value, icon: Icon, iconTone }) {
+  return (
+    <div
+      className={`rounded-2xl border p-3.5 ${
+        isDark
+          ? "bg-dark-card border-dark-border"
+          : "bg-white border-light-border shadow-sm"
+      }`}
+    >
+      <div className="flex items-start justify-between gap-2 mb-2">
+        <p
+          className={`text-[10px] font-black uppercase tracking-[0.14em] ${isDark ? "text-gray-500" : "text-gray-500"}`}
+        >
+          {label}
+        </p>
+        <Icon size={15} className={iconTone} />
+      </div>
+      <p className="text-lg font-black leading-none">{value}</p>
     </div>
   );
 }

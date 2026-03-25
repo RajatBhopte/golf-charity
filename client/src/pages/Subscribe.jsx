@@ -151,6 +151,33 @@ export default function Subscribe() {
             dashboard.
           </p>
 
+          <div
+            className={`mb-8 rounded-2xl border p-4 sm:p-5 ${
+              isDark
+                ? "border-amber-500/30 bg-amber-500/10"
+                : "border-amber-400/40 bg-amber-50"
+            }`}
+          >
+            <h2 className="text-sm font-black uppercase tracking-[0.14em] text-amber-500 mb-3">
+              Restricted Access Until Payment
+            </h2>
+            <ul
+              className={`space-y-2 text-sm ${
+                isDark ? "text-gray-300" : "text-slate-700"
+              }`}
+            >
+              <li>- You can explore charities and platform features.</li>
+              <li>
+                - Score entry and draw participation are locked until
+                subscription is active.
+              </li>
+              <li>
+                - Every protected request is validated in real-time for active
+                status.
+              </li>
+            </ul>
+          </div>
+
           <div className="space-y-3 mb-8">
             {PLAN_OPTIONS.map((plan) => {
               const isSelected = selectedPlan === plan.id;
@@ -201,6 +228,15 @@ export default function Subscribe() {
               ? "Processing..."
               : `Pay ${formatInr(selectedPlanDetails.amountInr)} with Razorpay`}
           </button>
+
+          <p
+            className={`mt-3 text-center text-xs font-semibold ${
+              isDark ? "text-gray-500" : "text-gray-500"
+            }`}
+          >
+            Activate now to unlock score management, monthly draw eligibility,
+            and full dashboard access.
+          </p>
         </div>
       </main>
     </div>

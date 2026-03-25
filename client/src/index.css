@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,200..800;1,200..800&display=swap');
+@import url("https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,200..800;1,200..800&display=swap");
 
 @tailwind base;
 @tailwind components;
@@ -16,7 +16,7 @@
   }
 
   body {
-    font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
+    font-family: "Plus Jakarta Sans", system-ui, sans-serif;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
   }
@@ -141,4 +141,31 @@ input[type="date"]::-webkit-calendar-picker-indicator:hover {
 
 .dark input[type="date"]::-webkit-calendar-picker-indicator:hover {
   filter: invert(1);
+}
+
+/* Score date inputs: keep full year visible in native date field */
+.score-date-input {
+  font-variant-numeric: tabular-nums;
+}
+
+.score-date-input::-webkit-datetime-edit {
+  padding-right: 0.1rem;
+}
+
+.score-date-input::-webkit-datetime-edit-fields-wrapper {
+  display: inline-flex;
+  align-items: center;
+}
+
+.score-date-input::-webkit-datetime-edit-year-field {
+  min-width: 4.2ch;
+}
+
+.score-date-input::-webkit-datetime-edit-month-field,
+.score-date-input::-webkit-datetime-edit-day-field {
+  min-width: 2.2ch;
+}
+
+.score-date-input::-webkit-datetime-edit-text {
+  padding: 0 0.08em;
 }

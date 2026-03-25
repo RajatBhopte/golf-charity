@@ -1,6 +1,6 @@
 /* eslint-disable react-refresh/only-export-components */
-import { createContext, useContext, useEffect, useState } from 'react';
-import { supabase } from '../utils/supabase';
+import { createContext, useContext, useEffect, useState } from "react";
+import { supabase } from "../utils/supabase";
 
 const AuthContext = createContext();
 
@@ -22,9 +22,11 @@ export function AuthProvider({ children }) {
     });
 
     // 2. Listen for auth changes
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, session) => {
       setSession(session);
-      
+
       if (session?.user) {
         fetchUserProfile(session.user.id);
       } else {
@@ -37,15 +39,17 @@ export function AuthProvider({ children }) {
   }, []);
 
   const fetchUserProfile = async (userId) => {
+    setLoading(true);
+
     try {
       const { data, error } = await supabase
-        .from('users')
-        .select('*')
-        .eq('id', userId)
+        .from("users")
+        .select("*")
+        .eq("id", userId)
         .single();
-        
+
       if (error) {
-        console.error('Error fetching user profile:', error);
+        console.error("Error fetching user profile:", error);
         // Sometimes the row might not exist yet during signup, we just set the auth user initially
         setUser({ id: userId });
       } else {
@@ -62,8 +66,17 @@ export function AuthProvider({ children }) {
     return supabase.auth.signInWithPassword({ email, password });
   };
 
-  const loginWithGoogle = async () => {
-    return supabase.auth.signInWithOAuth({ provider: 'google' });
+  const loginWithGoogle = async (redirectPath = "/dashboard") => {
+    const normalizedRedirectPath = redirectPath.startsWith("/")
+      ? redirectPath
+      : "/dashboard";
+
+    return supabase.auth.signInWithOAuth({
+      provider: "google",
+      options: {
+        redirectTo: `${window.location.origin}${normalizedRedirectPath}`,
+      },
+    });
   };
 
   const signup = async (email, password, metadata = {}) => {
@@ -72,7 +85,7 @@ export function AuthProvider({ children }) {
       password,
       options: {
         data: metadata,
-      }
+      },
     });
   };
 
@@ -101,20 +114,17 @@ export function AuthProvider({ children }) {
     logout,
     resetPassword,
     updatePassword,
-    refreshUserData: () => session?.user?.id && fetchUserProfile(session.user.id),
+    refreshUserData: () =>
+      session?.user?.id && fetchUserProfile(session.user.id),
   };
 
-  return (
-    <AuthContext.Provider value={value}>
-      {!loading && children}
-    </AuthContext.Provider>
-  );
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
 
 export const useAuth = () => {
   const context = useContext(AuthContext);
   if (context === undefined) {
-    throw new Error('useAuth must be used within an AuthProvider');
+    throw new Error("useAuth must be used within an AuthProvider");
   }
   return context;
 };

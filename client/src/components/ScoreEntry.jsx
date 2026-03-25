@@ -1,6 +1,13 @@
 import React, { useState } from "react";
-import { CheckCircle2, AlertCircle } from "lucide-react";
+import { CheckCircle2, AlertCircle, Calendar } from "lucide-react";
 import { useTheme } from "../context/ThemeContext";
+
+const formatDateDisplay = (dateValue) => {
+  if (!dateValue) return "MM/DD/YYYY";
+  const [year, month, day] = dateValue.split("-");
+  if (!year || !month || !day) return dateValue;
+  return `${month}/${day}/${year}`;
+};
 
 export default function ScoreEntry({ onAddScore, loading }) {
   const { isDark } = useTheme();
@@ -84,7 +91,7 @@ export default function ScoreEntry({ onAddScore, loading }) {
           </div>
         )}
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
           <div>
             <label
               className={`block text-xs font-medium mb-1.5 ${isDark ? "text-gray-400" : "text-gray-600"}`}
@@ -112,21 +119,29 @@ export default function ScoreEntry({ onAddScore, loading }) {
             >
               Date Played
             </label>
-            <div className="relative">
+            <div
+              className={`relative rounded-xl border focus-within:ring-2 transition-all ${
+                isDark
+                  ? "bg-dark-bg border-dark-border text-white focus-within:border-brand-500 focus-within:ring-brand-500/20"
+                  : "bg-gray-50 border-light-border text-light-text focus-within:border-brand-500 focus-within:ring-brand-500/20"
+              }`}
+              style={{ minHeight: "44px" }}
+            >
+              <div className="w-full px-4 pr-10 py-2.5 text-sm flex items-center justify-between pointer-events-none">
+                <span className="font-medium tabular-nums">
+                  {formatDateDisplay(playedDate)}
+                </span>
+                <Calendar size={18} className="text-brand-500" />
+              </div>
               <input
                 type="date"
                 required
                 value={playedDate}
                 max={new Date().toISOString().split("T")[0]}
                 onChange={(e) => setPlayedDate(e.target.value)}
-                className={`w-full px-4 pr-12 py-2.5 rounded-xl border focus:ring-2 outline-none transition-all cursor-pointer ${
-                  isDark
-                    ? "bg-dark-bg border-dark-border text-white focus:border-brand-500 focus:ring-brand-500/20 [color-scheme:dark]"
-                    : "bg-gray-50 border-light-border text-light-text focus:border-brand-500 focus:ring-brand-500/20 [color-scheme:light]"
+                className={`absolute inset-0 w-full h-full opacity-0 cursor-pointer ${
+                  isDark ? "[color-scheme:dark]" : "[color-scheme:light]"
                 }`}
-                style={{
-                  minHeight: "44px",
-                }}
               />
             </div>
           </div>
