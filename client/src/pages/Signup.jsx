@@ -1,5 +1,5 @@
 /* eslint-disable no-unused-vars */
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Link } from "react-router-dom";
 import { useLocation } from "react-router-dom";
@@ -15,8 +15,12 @@ import {
   Lock,
   AlertCircle,
   ArrowRight,
+  ChevronLeft,
+  ChevronRight,
   CheckCircle,
   Heart,
+  Search,
+  X,
 } from "lucide-react";
 import Navbar from "../components/Navbar";
 
@@ -32,6 +36,10 @@ export default function Signup() {
   const [isLoading, setIsLoading] = useState(false);
   const [charities, setCharities] = useState([]);
   const [charitiesLoading, setCharitiesLoading] = useState(true);
+  const [charitySearch, setCharitySearch] = useState("");
+  const [showAllCharities, setShowAllCharities] = useState(false);
+
+  const charityScrollerRef = useRef(null);
 
   const [formData, setFormData] = useState({
     fullName: "",
@@ -57,6 +65,36 @@ export default function Signup() {
       ? "bg-dark-surface border-dark-border text-white focus:border-brand-500"
       : "bg-white border-light-border text-light-text focus:border-brand-500"
   }`;
+
+  const filteredCharities = useMemo(() => {
+    const searchTerm = charitySearch.trim().toLowerCase();
+    if (!searchTerm) return charities;
+
+    return charities.filter((charity) =>
+      String(charity?.name || "")
+        .toLowerCase()
+        .includes(searchTerm),
+    );
+  }, [charities, charitySearch]);
+
+  const handleSelectCharity = (charityId) => {
+    setFormData((current) => ({
+      ...current,
+      charityId,
+    }));
+  };
+
+  const scrollCharityRow = (direction) => {
+    if (!charityScrollerRef.current) return;
+
+    const scrollAmount = Math.round(
+      charityScrollerRef.current.clientWidth * 0.8,
+    );
+    charityScrollerRef.current.scrollBy({
+      left: direction === "left" ? -scrollAmount : scrollAmount,
+      behavior: "smooth",
+    });
+  };
 
   useEffect(() => {
     const fetchCharities = async () => {
@@ -215,7 +253,7 @@ export default function Signup() {
     >
       <Navbar />
 
-      <main className="flex-1 flex flex-col items-center justify-center p-4 sm:p-6 lg:p-8 pt-24">
+      <main className="flex-1 flex flex-col items-center justify-center p-4 sm:p-6 lg:p-8 pt-20 sm:pt-22">
         {step < 3 && (
           <div className="w-full max-w-lg mb-8">
             <div className="flex justify-between items-center mb-2">
@@ -240,7 +278,7 @@ export default function Signup() {
           </div>
         )}
 
-        <div className="w-full max-w-lg p-8 sm:p-10 rounded-3xl glass-card relative overflow-hidden">
+        <div className="w-full max-w-lg p-6 sm:p-7 rounded-3xl glass-card relative overflow-hidden">
           <AnimatePresence mode="wait">
             {error && (
               <motion.div
@@ -476,9 +514,9 @@ export default function Signup() {
                 exit={{ opacity: 0, x: -20 }}
                 transition={{ duration: 0.3 }}
               >
-                <div className="text-center mb-8">
+                <div className="text-center mb-5">
                   <h1
-                    className={`text-2xl font-bold mb-2 tracking-tight ${isDark ? "text-white" : "text-light-text"}`}
+                    className={`text-xl font-bold mb-2 tracking-tight ${isDark ? "text-white" : "text-light-text"}`}
                   >
                     Choose Your <span className="gradient-text">Impact</span>
                   </h1>
@@ -490,28 +528,87 @@ export default function Signup() {
                 </div>
 
                 <div
-                  className={`mb-6 rounded-3xl border p-4 sm:p-5 ${isDark ? "border-brand-500/30 bg-[#0d1937]" : "border-brand-200 bg-brand-50/40"}`}
+                  className={`mb-4 rounded-3xl border p-3 sm:p-4 ${isDark ? "border-brand-500/30 bg-[#0d1937]" : "border-brand-200 bg-brand-50/40"}`}
                 >
-                  <div className="space-y-4">
+                  <div className="mb-3 flex items-center gap-2">
+                    <div className="relative flex-1">
+                      <Search
+                        size={15}
+                        className={`absolute left-3 top-1/2 -translate-y-1/2 ${isDark ? "text-gray-500" : "text-gray-400"}`}
+                      />
+                      <input
+                        type="text"
+                        value={charitySearch}
+                        onChange={(event) =>
+                          setCharitySearch(event.target.value)
+                        }
+                        placeholder="Search charities"
+                        className={`w-full pl-9 pr-3 py-2 rounded-xl border text-sm transition-colors focus:ring-2 focus:ring-brand-500 focus:outline-none ${
+                          isDark
+                            ? "bg-dark-surface border-dark-border text-white focus:border-brand-500"
+                            : "bg-white border-light-border text-light-text focus:border-brand-500"
+                        }`}
+                      />
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setShowAllCharities(true)}
+                      disabled={charitiesLoading || !filteredCharities.length}
+                      className={`shrink-0 px-3 py-2 rounded-xl text-xs font-semibold border transition-colors ${
+                        isDark
+                          ? "border-dark-border text-gray-200 hover:bg-dark-surface"
+                          : "border-light-border text-light-text hover:bg-gray-100"
+                      } ${charitiesLoading || !filteredCharities.length ? "opacity-60 cursor-not-allowed" : ""}`}
+                    >
+                      View all
+                    </button>
+                  </div>
+
+                  <div className="mb-3 hidden sm:flex items-center justify-end gap-2">
+                    <button
+                      type="button"
+                      onClick={() => scrollCharityRow("left")}
+                      className={`p-1.5 rounded-lg border transition-colors ${
+                        isDark
+                          ? "border-dark-border text-gray-300 hover:bg-dark-surface"
+                          : "border-light-border text-light-subtext hover:bg-gray-100"
+                      }`}
+                      aria-label="Scroll charities left"
+                    >
+                      <ChevronLeft size={15} />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => scrollCharityRow("right")}
+                      className={`p-1.5 rounded-lg border transition-colors ${
+                        isDark
+                          ? "border-dark-border text-gray-300 hover:bg-dark-surface"
+                          : "border-light-border text-light-subtext hover:bg-gray-100"
+                      }`}
+                      aria-label="Scroll charities right"
+                    >
+                      <ChevronRight size={15} />
+                    </button>
+                  </div>
+
+                  <div
+                    ref={charityScrollerRef}
+                    className="hide-scrollbar flex gap-3 overflow-x-auto pb-1 snap-x snap-mandatory scroll-smooth"
+                  >
                     {charitiesLoading && (
                       <div
-                        className={`rounded-xl border px-4 py-5 text-sm ${isDark ? "border-dark-border bg-dark-surface text-gray-400" : "border-light-border bg-gray-50 text-gray-500"}`}
+                        className={`w-full rounded-xl border px-4 py-5 text-sm ${isDark ? "border-dark-border bg-dark-surface text-gray-400" : "border-light-border bg-gray-50 text-gray-500"}`}
                       >
                         Loading charities...
                       </div>
                     )}
 
                     {!charitiesLoading &&
-                      charities.map((charity) => (
+                      filteredCharities.map((charity) => (
                         <div
                           key={charity.id}
-                          onClick={() =>
-                            setFormData((current) => ({
-                              ...current,
-                              charityId: charity.id,
-                            }))
-                          }
-                          className={`relative flex items-center gap-4 p-5 rounded-2xl border-2 cursor-pointer transition-all duration-300 hover:-translate-y-0.5 hover:scale-[1.01] ${
+                          onClick={() => handleSelectCharity(charity.id)}
+                          className={`relative min-w-[200px] sm:min-w-[220px] flex-shrink-0 snap-start flex flex-col items-center text-center gap-2 p-3 rounded-2xl border-2 cursor-pointer transition-all duration-300 hover:-translate-y-0.5 hover:scale-[1.01] ${
                             formData.charityId === charity.id
                               ? `border-green-500 ${isDark ? "bg-green-500/10 shadow-[0_0_25px_rgba(34,197,94,0.22)]" : "bg-green-50/70 shadow-[0_0_20px_rgba(34,197,94,0.18)]"}`
                               : isDark
@@ -520,22 +617,22 @@ export default function Signup() {
                           }`}
                         >
                           {formData.charityId === charity.id && (
-                            <div className="absolute right-4 top-4">
+                            <div className="absolute right-3 top-3">
                               <CheckCircle
-                                size={18}
+                                size={16}
                                 className="text-green-500"
                               />
                             </div>
                           )}
 
                           <div
-                            className={`w-12 h-12 rounded-xl overflow-hidden flex items-center justify-center border shrink-0 ${isDark ? "border-dark-border bg-dark-bg" : "border-light-border bg-gray-50"}`}
+                            className={`w-10 h-10 rounded-xl overflow-hidden flex items-center justify-center border shrink-0 ${isDark ? "border-dark-border bg-dark-bg" : "border-light-border bg-gray-50"}`}
                           >
                             {charity.logo_url ? (
                               <img
                                 src={charity.logo_url}
                                 alt={charity.name}
-                                className="w-8 h-8 object-contain"
+                                className="w-6 h-6 object-contain"
                               />
                             ) : (
                               <Heart size={18} className="text-brand-500" />
@@ -543,25 +640,26 @@ export default function Signup() {
                           </div>
 
                           <h4
-                            className={`font-extrabold text-2xl leading-tight tracking-tight ${isDark ? "text-white" : "text-light-text"}`}
+                            className={`font-bold text-base leading-tight tracking-tight ${isDark ? "text-white" : "text-light-text"}`}
                           >
                             {charity.name}
                           </h4>
                         </div>
                       ))}
 
-                    {!charitiesLoading && charities.length === 0 && (
+                    {!charitiesLoading && !filteredCharities.length && (
                       <div
-                        className={`rounded-xl border px-4 py-5 text-sm ${isDark ? "border-dark-border bg-dark-surface text-gray-400" : "border-light-border bg-gray-50 text-gray-500"}`}
+                        className={`w-full rounded-xl border px-4 py-5 text-sm ${isDark ? "border-dark-border bg-dark-surface text-gray-400" : "border-light-border bg-gray-50 text-gray-500"}`}
                       >
-                        No charities are available yet. Ask an admin to add one
-                        before signing up.
+                        {charities.length
+                          ? "No charities match your search."
+                          : "No charities are available yet. Ask an admin to add one before signing up."}
                       </div>
                     )}
                   </div>
                 </div>
 
-                <div className="mb-8">
+                <div className="mb-4">
                   <div className="flex justify-between items-center mb-2">
                     <label
                       className={`block text-sm font-semibold flex items-center gap-1.5 ${isDark ? "text-white" : "text-light-text"}`}
@@ -634,6 +732,91 @@ export default function Signup() {
                     )}
                   </button>
                 </div>
+
+                {showAllCharities && (
+                  <div className="fixed inset-0 z-[70] bg-black/60 backdrop-blur-sm p-4 flex items-center justify-center">
+                    <div
+                      className={`w-full max-w-2xl max-h-[85vh] overflow-hidden rounded-3xl border ${isDark ? "bg-dark-bg border-dark-border" : "bg-white border-light-border"}`}
+                    >
+                      <div
+                        className={`flex items-center justify-between px-5 py-4 border-b ${isDark ? "border-dark-border" : "border-light-border"}`}
+                      >
+                        <h3
+                          className={`text-base font-bold ${isDark ? "text-white" : "text-light-text"}`}
+                        >
+                          Select Charity
+                        </h3>
+                        <button
+                          type="button"
+                          onClick={() => setShowAllCharities(false)}
+                          className={`p-2 rounded-lg transition-colors ${
+                            isDark
+                              ? "text-gray-300 hover:bg-dark-surface"
+                              : "text-light-subtext hover:bg-gray-100"
+                          }`}
+                          aria-label="Close charity modal"
+                        >
+                          <X size={16} />
+                        </button>
+                      </div>
+
+                      <div className="max-h-[calc(85vh-68px)] overflow-y-auto p-4">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                          {filteredCharities.map((charity) => (
+                            <button
+                              key={`modal-${charity.id}`}
+                              type="button"
+                              onClick={() => {
+                                handleSelectCharity(charity.id);
+                                setShowAllCharities(false);
+                              }}
+                              className={`text-left relative flex items-center gap-3 p-3 rounded-2xl border-2 transition-colors ${
+                                formData.charityId === charity.id
+                                  ? `border-green-500 ${isDark ? "bg-green-500/10" : "bg-green-50/60"}`
+                                  : isDark
+                                    ? "border-dark-border bg-dark-surface hover:border-green-500/40"
+                                    : "border-gray-200 bg-white hover:border-green-400/60"
+                              }`}
+                            >
+                              {formData.charityId === charity.id && (
+                                <CheckCircle
+                                  size={15}
+                                  className="absolute right-3 top-3 text-green-500"
+                                />
+                              )}
+                              <div
+                                className={`w-9 h-9 rounded-lg overflow-hidden flex items-center justify-center border shrink-0 ${isDark ? "border-dark-border bg-dark-bg" : "border-light-border bg-gray-50"}`}
+                              >
+                                {charity.logo_url ? (
+                                  <img
+                                    src={charity.logo_url}
+                                    alt={charity.name}
+                                    className="w-5 h-5 object-contain"
+                                  />
+                                ) : (
+                                  <Heart size={16} className="text-brand-500" />
+                                )}
+                              </div>
+                              <span
+                                className={`font-semibold text-sm ${isDark ? "text-white" : "text-light-text"}`}
+                              >
+                                {charity.name}
+                              </span>
+                            </button>
+                          ))}
+
+                          {!filteredCharities.length && (
+                            <div
+                              className={`sm:col-span-2 rounded-xl border px-4 py-5 text-sm ${isDark ? "border-dark-border bg-dark-surface text-gray-400" : "border-light-border bg-gray-50 text-gray-500"}`}
+                            >
+                              No charities match your search.
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
               </motion.div>
             )}
           </AnimatePresence>
