@@ -50,15 +50,46 @@ const getRenewalDateByPlan = (plan, baseDate = new Date()) => {
 
 const SAFE_USERS_SELECT = "id, email, full_name, subscription_status";
 
-const updateUserWithFallback = async (userId, payload) => {
-  const optionalColumns = new Set([
-    "subscription_plan",
-    "subscription_started_at",
-    "subscription_renewal_date",
-    "subscription_cancelled_at",
-    "subscription_last_payment_at",
-  ]);
+const OPTIONAL_SUBSCRIPTION_COLUMNS = new Set([
+  "subscription_plan",
+  "subscription_started_at",
+  "subscription_renewal_date",
+  "subscription_cancelled_at",
+  "subscription_last_payment_at",
+]);
 
+const upsertUserWithFallback = async (payload) => {
+  const omittedColumns = new Set();
+
+  while (true) {
+    const currentPayload = { ...payload };
+    for (const key of omittedColumns) {
+      delete currentPayload[key];
+    }
+
+    const result = await supabase
+      .from("users")
+      .upsert(currentPayload, { onConflict: "id" });
+
+    if (!result.error) {
+      return result;
+    }
+
+    const missingColumn = getMissingUsersColumnName(result.error);
+    if (
+      missingColumn &&
+      OPTIONAL_SUBSCRIPTION_COLUMNS.has(missingColumn) &&
+      !omittedColumns.has(missingColumn)
+    ) {
+      omittedColumns.add(missingColumn);
+      continue;
+    }
+
+    return result;
+  }
+};
+
+const updateUserWithFallback = async (userId, payload) => {
   const omittedColumns = new Set();
 
   while (true) {
@@ -89,7 +120,7 @@ const updateUserWithFallback = async (userId, payload) => {
     const missingColumn = getMissingUsersColumnName(result.error);
     if (
       missingColumn &&
-      optionalColumns.has(missingColumn) &&
+      OPTIONAL_SUBSCRIPTION_COLUMNS.has(missingColumn) &&
       !omittedColumns.has(missingColumn)
     ) {
       omittedColumns.add(missingColumn);
@@ -267,20 +298,7 @@ router.post("/razorpay/verify", requireAuth, async (req, res) => {
         created_at: new Date().toISOString(),
       };
 
-      let upsertResult = await supabase
-        .from("users")
-        .upsert(upsertPayload, { onConflict: "id" });
-
-      if (
-        upsertResult.error &&
-        isMissingSubscriptionPlanColumn(upsertResult.error)
-      ) {
-        const fallbackUpsertPayload = { ...upsertPayload };
-        delete fallbackUpsertPayload.subscription_plan;
-        upsertResult = await supabase
-          .from("users")
-          .upsert(fallbackUpsertPayload, { onConflict: "id" });
-      }
+      const upsertResult = await upsertUserWithFallback(upsertPayload);
 
       if (upsertResult.error) {
         throw upsertResult.error;

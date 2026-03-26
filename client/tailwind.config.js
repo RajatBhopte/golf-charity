@@ -25,7 +25,7 @@ export default {
           hover: "#243044",
         },
         light: {
-          bg: "#e1dfea",
+          bg: "#f8fafc",
           surface: "#ffffff",
           card: "#ffffff",
           border: "#e2e8f0",

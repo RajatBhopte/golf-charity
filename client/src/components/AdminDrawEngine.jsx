@@ -329,7 +329,7 @@ export default function AdminDrawEngine({ isDark }) {
       {simulation && (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
           {/* Pools Info */}
-          <div className="lg:col-span-1 space-y-6">
+          <div className="lg:col-span-1 space-y-6 lg:space-y-0 lg:h-full lg:grid lg:grid-rows-[auto_minmax(0,1fr)] lg:gap-6">
             <div
               className={`glass-card p-6 rounded-2xl border ${isDark ? "bg-dark-card border-dark-border" : "bg-white border-light-border shadow-sm"}`}
             >
@@ -385,45 +385,95 @@ export default function AdminDrawEngine({ isDark }) {
             </div>
 
             <div
-              className={`glass-card p-6 rounded-2xl border ${isDark ? "bg-dark-card border-dark-border" : "bg-white border-light-border shadow-sm"}`}
+              className={`glass-card p-5 rounded-2xl border lg:h-full lg:flex lg:flex-col ${isDark ? "bg-dark-card border-dark-border" : "bg-white border-light-border shadow-sm"}`}
             >
               <h3 className="font-bold mb-4 flex items-center gap-2">
                 <CreditCard size={18} className="text-brand-500" /> Pool Splits
               </h3>
-              <div className="space-y-4">
+              <div className="space-y-2.5 lg:space-y-0 lg:grid lg:grid-rows-3 lg:gap-2.5 lg:h-full">
                 {TIER_ORDER.map((key) => {
                   const breakdown = simulation.prize_breakdown?.[key];
                   const percent = simulation.pool_split?.[key] || 0;
+                  const accentClasses =
+                    key === "tier_5"
+                      ? isDark
+                        ? "text-amber-400"
+                        : "text-amber-700"
+                      : key === "tier_4"
+                        ? isDark
+                          ? "text-slate-300"
+                          : "text-slate-700"
+                        : isDark
+                          ? "text-orange-400"
+                          : "text-orange-700";
+
+                  const progressClasses =
+                    key === "tier_5"
+                      ? "bg-amber-500"
+                      : key === "tier_4"
+                        ? "bg-slate-500"
+                        : "bg-orange-600";
+
                   return (
-                    <div key={key}>
-                      <div className="flex justify-between text-xs mb-1 uppercase font-bold tracking-widest opacity-60">
-                        <span>{key.replace("_", " ")} Match</span>
-                        <span>{percent * 100}%</span>
+                    <div
+                      key={key}
+                      className={`rounded-xl border p-3 lg:h-full lg:flex lg:flex-col lg:justify-between ${isDark ? "bg-black/20 border-dark-border" : "bg-gray-50 border-light-border"}`}
+                    >
+                      <div className="flex justify-between items-center mb-2">
+                        <span
+                          className={`text-xs uppercase font-bold tracking-widest ${isDark ? "text-gray-400" : "text-gray-500"}`}
+                        >
+                          {key.replace("_", " ")} Match
+                        </span>
+                        <span className={`text-xs font-bold ${accentClasses}`}>
+                          {percent * 100}%
+                        </span>
                       </div>
-                      <div className="space-y-2 bg-black/20 p-3 rounded-lg">
-                        <div className="flex justify-between items-center">
-                          <span className="text-lg font-bold">
+
+                      <div
+                        className={`h-1.5 rounded-full overflow-hidden mb-2.5 ${isDark ? "bg-white/10" : "bg-gray-200"}`}
+                      >
+                        <div
+                          className={`h-full ${progressClasses}`}
+                          style={{
+                            width: `${Math.max(6, Math.round(percent * 100))}%`,
+                          }}
+                        />
+                      </div>
+
+                      <div className="flex justify-between items-start gap-3">
+                        <div>
+                          <div className="text-2xl font-black leading-none">
                             {formatCurrencyINR(
                               breakdown?.total_pool_amount || 0,
                             )}
-                          </span>
-                          <span className="text-xs opacity-50">
-                            {breakdown?.winner_count || 0} winner(s)
-                          </span>
-                        </div>
-                        <div className="text-[11px] opacity-60 uppercase tracking-widest">
-                          Per winner:{" "}
-                          {formatCurrencyINR(breakdown?.per_winner_amount || 0)}
-                        </div>
-                        {Number(breakdown?.rollover_amount || 0) > 0 && (
-                          <div
-                            className={`text-[11px] font-bold uppercase tracking-widest ${isDark ? "text-amber-400" : "text-amber-700"}`}
-                          >
-                            Rolls over:{" "}
-                            {formatCurrencyINR(breakdown.rollover_amount)}
                           </div>
-                        )}
+                          <div
+                            className={`mt-1.5 text-[11px] uppercase tracking-widest ${isDark ? "text-gray-400" : "text-gray-500"}`}
+                          >
+                            Per winner:{" "}
+                            {formatCurrencyINR(
+                              breakdown?.per_winner_amount || 0,
+                            )}
+                          </div>
+                        </div>
+                        <div className="text-right">
+                          <div
+                            className={`text-xs font-semibold ${isDark ? "text-gray-300" : "text-gray-600"}`}
+                          >
+                            {breakdown?.winner_count || 0} winner(s)
+                          </div>
+                        </div>
                       </div>
+
+                      {Number(breakdown?.rollover_amount || 0) > 0 && (
+                        <div
+                          className={`mt-2 text-[11px] font-bold uppercase tracking-widest ${isDark ? "text-amber-400" : "text-amber-700"}`}
+                        >
+                          Rolls over:{" "}
+                          {formatCurrencyINR(breakdown.rollover_amount)}
+                        </div>
+                      )}
                     </div>
                   );
                 })}
