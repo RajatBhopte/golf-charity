@@ -1,4 +1,4 @@
-# Golf Charity Subscription Platform ⛳️❤️
+# SwingSave Subscription Platform ⛳️❤️
 
 A premium, full-stack platform for managing golf tournament subscriptions, charitable contributions, and prize draws. Features a state-of-the-art admin panel and player terminal with live analytics and score tracking.
 
@@ -38,7 +38,7 @@ A premium, full-stack platform for managing golf tournament subscriptions, chari
 -   [Node.js](https://nodejs.org/) (v18 or higher)
 -   [NPM](https://www.npmjs.com/)
 -   [Supabase Account](https://supabase.com/)
--   [Stripe Account](https://stripe.com/) (for payments)
+-   [Razorpay Account](https://razorpay.com/) (for payments)
 
 ### 2. Clone the Repository
 ```bash
