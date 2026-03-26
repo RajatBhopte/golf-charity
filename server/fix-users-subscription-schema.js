@@ -48,7 +48,10 @@ async function fixUsersSubscriptionSchema() {
         console.log(sql);
         console.log("\n---------------------------");
       } else {
-        console.error("Failed to apply users subscription schema fix:", error.message);
+        console.error(
+          "Failed to apply users subscription schema fix:",
+          error.message,
+        );
       }
       return;
     }
