@@ -55,12 +55,13 @@ router.post("/", requireActiveSubscription, async (req, res) => {
 
   try {
     // 1. Enforce rolling 5-score limit
-    // Fetch all current scores to see if we need to delete the oldest
+    // Fetch all current scores to see if we need to delete the oldest by played date
     const { data: existingScores, error: fetchError } = await supabase
       .from("scores")
-      .select("id, created_at")
+      .select("id, played_date, created_at")
       .eq("user_id", req.user.id)
-      .order("created_at", { ascending: true }); // Oldest first
+      .order("played_date", { ascending: true })
+      .order("created_at", { ascending: true }); // Tie-break when played_date is the same
 
     if (fetchError) throw fetchError;
 

@@ -67,15 +67,15 @@ export default function ScoreList({ scores = [], onEdit, onDelete, loading }) {
     }
   };
 
-  // Find the oldest score to highlight it (the one that will be replaced next)
-  // Assuming scores array is sorted newest first (played_date DESC, created_at DESC)
-  // But wait, "oldest score" in terms of deletion is based on created_at ASC.
-  // We'll calculate the oldest created_at explicitly if we have 5 scores.
+  // Find the oldest score to highlight it (the one that will be replaced next).
+  // Replacement order is by played_date ASC, with created_at ASC as a tie-breaker.
   const oldestScoreId =
     scores.length === 5
-      ? [...scores].sort(
-          (a, b) => new Date(a.created_at) - new Date(b.created_at),
-        )[0].id
+      ? [...scores].sort((a, b) => {
+          const playedDelta = new Date(a.played_date) - new Date(b.played_date);
+          if (playedDelta !== 0) return playedDelta;
+          return new Date(a.created_at) - new Date(b.created_at);
+        })[0].id
       : null;
 
   return (

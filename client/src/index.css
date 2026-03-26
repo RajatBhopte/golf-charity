@@ -31,7 +31,7 @@
   /* Light mode */
   html:not(.dark),
   html:not(.dark) body {
-    background-color: #f8fafc;
+    background-color: #e1dfea;
     color: #0f172a;
   }
 }
@@ -162,7 +162,7 @@
   width: 8px;
 }
 ::-webkit-scrollbar-track {
-  background: #f8fafc;
+  background: #e1dfea;
 }
 ::-webkit-scrollbar-thumb {
   background: #cbd5e1;
