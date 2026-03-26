@@ -6,7 +6,12 @@ import {
 } from "react-router-dom";
 import { ThemeProvider } from "./context/ThemeContext";
 import { AuthProvider } from "./context/AuthContext";
-import { AuthRoute, AdminRoute } from "./components/ProtectedRoute";
+import {
+  UserRoute,
+  AdminRoute,
+  AdminLoginRoute,
+  AuthEntryRoute,
+} from "./components/ProtectedRoute";
 
 // Pages
 import Home from "./pages/Home";
@@ -27,18 +32,22 @@ function App() {
           <Routes>
             {/* Public Routes */}
             <Route path="/" element={<Home />} />
-            <Route path="/login" element={<Login />} />
-            <Route path="/signup" element={<Signup />} />
+            <Route element={<AuthEntryRoute />}>
+              <Route path="/login" element={<Login />} />
+              <Route path="/signup" element={<Signup />} />
+            </Route>
             <Route
               path="/get-started"
               element={<Navigate to="/signup" replace />}
             />
             <Route path="/reset-password" element={<ResetPassword />} />
             <Route path="/charities" element={<Charities />} />
-            <Route path="/admin/login" element={<AdminLogin />} />
+            <Route element={<AdminLoginRoute />}>
+              <Route path="/admin/login" element={<AdminLogin />} />
+            </Route>
 
-            {/* Protected Routes (Login Required) */}
-            <Route element={<AuthRoute />}>
+            {/* Protected User Routes (Login + Non-Admin Required) */}
+            <Route element={<UserRoute />}>
               <Route path="/subscribe" element={<Subscribe />} />
               <Route path="/dashboard" element={<Dashboard />} />
               {/* Add other login-only routes here (like account settings) */}

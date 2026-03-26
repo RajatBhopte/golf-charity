@@ -25,6 +25,67 @@ export const AuthRoute = () => {
 };
 
 /**
+ * UserRoute: Protects routes that require a logged-in non-admin user.
+ * Redirects admins to /admin and unauthenticated users to /login.
+ */
+export const UserRoute = () => {
+  const { session, user, loading } = useAuth();
+  const location = useLocation();
+
+  if (loading && !session) return null;
+
+  if (!session) {
+    return <Navigate to="/login" state={{ from: location }} replace />;
+  }
+
+  if (user?.role === "admin") {
+    return <Navigate to="/admin" replace />;
+  }
+
+  return <Outlet />;
+};
+
+/**
+ * AdminLoginRoute: Keeps authenticated users off the admin login page.
+ * Admins go to /admin and non-admin users go to /dashboard.
+ */
+export const AdminLoginRoute = () => {
+  const { session, user, loading } = useAuth();
+
+  if (loading) return null;
+
+  if (session && user?.role === "admin") {
+    return <Navigate to="/admin" replace />;
+  }
+
+  if (session) {
+    return <Navigate to="/dashboard" replace />;
+  }
+
+  return <Outlet />;
+};
+
+/**
+ * AuthEntryRoute: Keeps authenticated users off login/signup pages.
+ * Admins go to /admin and users go to /dashboard.
+ */
+export const AuthEntryRoute = () => {
+  const { session, user, loading } = useAuth();
+
+  if (loading) return null;
+
+  if (session && user?.role === "admin") {
+    return <Navigate to="/admin" replace />;
+  }
+
+  if (session) {
+    return <Navigate to="/dashboard" replace />;
+  }
+
+  return <Outlet />;
+};
+
+/**
  * SubRoute: Protects routes that require a logged-in user WITH an active subscription.
  * Redirects to /subscribe if no active subscription found.
  */

@@ -1,5 +1,6 @@
 /* eslint-disable no-unused-vars */
 import { useEffect, useMemo, useState } from "react";
+import { Navigate } from "react-router-dom";
 import {
   Heart,
   Trophy,
@@ -13,7 +14,6 @@ import {
   Loader2,
   X,
   Lock,
-  Search,
 } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import { useTheme } from "../context/ThemeContext";
@@ -51,6 +51,11 @@ import UserSidebar from "../components/UserSidebar";
 export default function Dashboard() {
   const { user, session, refreshUserData } = useAuth();
   const { isDark } = useTheme();
+
+  if (user?.role === "admin") {
+    return <Navigate to="/admin" replace />;
+  }
+
   const [activeTab, setActiveTab] = useState("overview");
   const [charities, setCharities] = useState([]);
   const [featuredCharity, setFeaturedCharity] = useState(null);
@@ -62,9 +67,6 @@ export default function Dashboard() {
   const [selectedCharityId, setSelectedCharityId] = useState("");
   const [selectedCharityPercentage, setSelectedCharityPercentage] =
     useState(10);
-  const [impactCharitySearch, setImpactCharitySearch] = useState("");
-  const [impactSpotlightOnly, setImpactSpotlightOnly] = useState(false);
-  const [impactMinRaised, setImpactMinRaised] = useState(0);
   const [savingImpactSettings, setSavingImpactSettings] = useState(false);
   const [impactSuccessMsg, setImpactSuccessMsg] = useState("");
   const [subscriptionActionLoading, setSubscriptionActionLoading] =
@@ -169,31 +171,6 @@ export default function Dashboard() {
       null,
     [charities, featuredCharity, user?.charity_id],
   );
-
-  const impactFilteredCharities = useMemo(() => {
-    const searchTerm = impactCharitySearch.trim().toLowerCase();
-
-    return charities.filter((charity) => {
-      if (impactSpotlightOnly && !charity?.is_spotlight) {
-        return false;
-      }
-
-      if (
-        impactMinRaised > 0 &&
-        Number(charity?.total_raised || 0) < impactMinRaised
-      ) {
-        return false;
-      }
-
-      if (!searchTerm) {
-        return true;
-      }
-
-      const name = String(charity?.name || "").toLowerCase();
-      const description = String(charity?.description || "").toLowerCase();
-      return name.includes(searchTerm) || description.includes(searchTerm);
-    });
-  }, [charities, impactCharitySearch, impactSpotlightOnly, impactMinRaised]);
 
   const drawTickets = isActiveSubscriber && scores.length >= 5 ? 1 : 0;
   const unreadNotifications = notifications.filter((n) => !n.is_read).length;
@@ -871,69 +848,6 @@ export default function Dashboard() {
                           My Charity Settings
                         </h4>
 
-                        <div className="mb-3 rounded-xl border p-3 bg-black/[0.02] dark:bg-white/[0.02] border-black/10 dark:border-white/10 space-y-3">
-                          <div className="relative">
-                            <Search
-                              size={14}
-                              className={`absolute left-3 top-1/2 -translate-y-1/2 ${
-                                isDark ? "text-gray-500" : "text-gray-400"
-                              }`}
-                            />
-                            <input
-                              value={impactCharitySearch}
-                              onChange={(e) =>
-                                setImpactCharitySearch(e.target.value)
-                              }
-                              placeholder="Search charities"
-                              className={`w-full rounded-xl border pl-9 pr-3 py-2.5 text-sm outline-none ${
-                                isDark
-                                  ? "bg-[#0a132b] border-dark-border text-white"
-                                  : "bg-white border-light-border text-slate-800"
-                              }`}
-                            />
-                          </div>
-
-                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                            <label
-                              className={`flex items-center justify-between rounded-xl border px-3 py-2 text-xs font-semibold ${
-                                isDark
-                                  ? "border-dark-border text-gray-300"
-                                  : "border-light-border text-slate-700"
-                              }`}
-                            >
-                              Spotlight only
-                              <input
-                                type="checkbox"
-                                checked={impactSpotlightOnly}
-                                onChange={(e) =>
-                                  setImpactSpotlightOnly(e.target.checked)
-                                }
-                              />
-                            </label>
-                            <input
-                              type="number"
-                              min="0"
-                              value={impactMinRaised}
-                              onChange={(e) =>
-                                setImpactMinRaised(Number(e.target.value) || 0)
-                              }
-                              placeholder="Min raised"
-                              className={`w-full rounded-xl border px-3 py-2 text-sm outline-none ${
-                                isDark
-                                  ? "bg-[#0a132b] border-dark-border text-white"
-                                  : "bg-white border-light-border text-slate-800"
-                              }`}
-                            />
-                          </div>
-
-                          <p
-                            className={`text-[11px] ${isDark ? "text-gray-500" : "text-gray-500"}`}
-                          >
-                            {impactFilteredCharities.length} charities match
-                            your filters.
-                          </p>
-                        </div>
-
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3">
                           <div>
                             <label
@@ -953,7 +867,7 @@ export default function Dashboard() {
                               }`}
                             >
                               <option value="">No charity selected</option>
-                              {impactFilteredCharities.map((charity) => (
+                              {charities.map((charity) => (
                                 <option key={charity.id} value={charity.id}>
                                   {charity.name}
                                 </option>

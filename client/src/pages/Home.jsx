@@ -85,13 +85,18 @@ export default function Home() {
   useEffect(() => {
     if (loading || !session?.user) return;
 
+    if (user?.role === "admin") {
+      navigate("/admin", { replace: true });
+      return;
+    }
+
     if (!user?.charity_id) {
       navigate("/signup?oauth=google", { replace: true });
       return;
     }
 
     navigate("/dashboard", { replace: true });
-  }, [loading, navigate, session?.user, user?.charity_id]);
+  }, [loading, navigate, session?.user, user?.charity_id, user?.role]);
 
   useEffect(() => {
     const fetchCharities = async () => {
@@ -300,7 +305,7 @@ export default function Home() {
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.6, delay: 0.6 }}
-              className={`mt-16 grid grid-cols-3 gap-6 max-w-lg mx-auto py-6 px-8 rounded-2xl border ${
+              className={`mt-16 grid grid-cols-3 gap-3 sm:gap-6 max-w-lg mx-auto py-5 sm:py-6 px-4 sm:px-8 rounded-2xl border ${
                 isDark
                   ? "bg-dark-card/50 border-dark-border"
                   : "bg-white/90 border-slate-200 shadow-md"
@@ -312,11 +317,11 @@ export default function Home() {
                 { value: "5", label: "Scores to Play" },
               ].map(({ value, label }) => (
                 <div key={label} className="text-center">
-                  <div className="text-2xl font-bold gradient-text">
+                  <div className="text-lg sm:text-2xl font-bold gradient-text leading-tight">
                     {value}
                   </div>
                   <div
-                    className={`text-xs mt-1 ${isDark ? "text-gray-500" : "text-slate-600"}`}
+                    className={`text-[11px] sm:text-xs mt-1 ${isDark ? "text-gray-500" : "text-slate-600"}`}
                   >
                     {label}
                   </div>
@@ -552,8 +557,8 @@ export default function Home() {
               variants={fadeInUp}
               className={`text-lg max-w-2xl mx-auto ${isDark ? "text-gray-400" : "text-slate-700"}`}
             >
-              Admin spotlight selections now flow straight to the homepage, so
-              featured causes and upcoming events stay current.
+              Discover featured causes and upcoming community events, refreshed
+              regularly so you can support what matters most.
             </motion.p>
           </motion.div>
 

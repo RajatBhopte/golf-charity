@@ -1,43 +1,52 @@
-import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { useAuth } from '../context/AuthContext';
-import { Shield, Lock, Mail, Loader2, AlertCircle, ArrowRight } from 'lucide-react';
+import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
+import { useAuth } from "../context/AuthContext";
+import {
+  Shield,
+  Lock,
+  Mail,
+  Loader2,
+  AlertCircle,
+  ArrowRight,
+} from "lucide-react";
 
 export default function AdminLogin() {
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [error, setError] = useState('');
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
-  
-  const { login, logout, user, session } = useAuth();
+
+  const { login, user, session, loading: authLoading } = useAuth();
   const navigate = useNavigate();
 
   // If already logged in as admin, redirect immediately
   useEffect(() => {
-    if (session && user?.role === 'admin') {
-      navigate('/admin', { replace: true });
+    if (authLoading) return;
+
+    if (session && user?.role === "admin") {
+      navigate("/admin", { replace: true });
+      return;
     }
-    if (session && user && user.role !== 'admin') {
-      setError('This account does not have admin access.');
-      setLoading(false);
-      logout();
+
+    if (session && user?.role && user.role !== "admin") {
+      navigate("/dashboard", { replace: true });
     }
-  }, [session, user, navigate, logout]);
+  }, [authLoading, session, user, navigate]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    setError('');
+    setError("");
     setLoading(true);
 
     try {
       const { error: loginError } = await login(email, password);
-      
+
       if (loginError) throw loginError;
 
       // The AuthContext will fetch the profile, so we wait or depend on the useEffect above
       // But we can add a manual check here if needed.
     } catch (err) {
-      setError(err.message || 'Invalid administrator credentials');
+      setError(err.message || "Invalid administrator credentials");
       setLoading(false);
     }
   };
@@ -59,7 +68,10 @@ export default function AdminLogin() {
           <h1 className="text-3xl font-black tracking-tighter uppercase mb-2">
             Admin <span className="text-brand-500">Portal</span>
           </h1>
-          <p className="text-gray-400 text-sm font-medium tracking-wide uppercase opacity-60"> Restricted Access Layer </p>
+          <p className="text-gray-400 text-sm font-medium tracking-wide uppercase opacity-60">
+            {" "}
+            Restricted Access Layer{" "}
+          </p>
         </div>
 
         {/* Login Card */}
@@ -74,7 +86,10 @@ export default function AdminLogin() {
 
             <div className="space-y-4">
               <div className="relative group">
-                <Mail className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500 group-focus-within:text-brand-500 transition-colors" size={20} />
+                <Mail
+                  className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500 group-focus-within:text-brand-500 transition-colors"
+                  size={20}
+                />
                 <input
                   required
                   type="email"
@@ -86,7 +101,10 @@ export default function AdminLogin() {
               </div>
 
               <div className="relative group">
-                <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500 group-focus-within:text-brand-500 transition-colors" size={20} />
+                <Lock
+                  className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500 group-focus-within:text-brand-500 transition-colors"
+                  size={20}
+                />
                 <input
                   required
                   type="password"
@@ -103,7 +121,9 @@ export default function AdminLogin() {
               type="submit"
               className="w-full btn-primary !py-5 flex items-center justify-center gap-3 text-lg font-black uppercase tracking-widest shadow-xl shadow-brand-500/20 hover:scale-[1.02] active:scale-[0.98] transition-all disabled:opacity-50 disabled:hover:scale-100"
             >
-              {loading ? <Loader2 className="animate-spin" size={24} /> : (
+              {loading ? (
+                <Loader2 className="animate-spin" size={24} />
+              ) : (
                 <>
                   Authenticate <ArrowRight size={20} />
                 </>
@@ -112,8 +132,8 @@ export default function AdminLogin() {
           </form>
 
           <div className="mt-8 text-center">
-            <button 
-              onClick={() => navigate('/')} 
+            <button
+              onClick={() => navigate("/")}
               className="text-xs text-gray-500 hover:text-white transition-colors font-bold uppercase tracking-widest"
             >
               Return to Public Site
@@ -123,9 +143,15 @@ export default function AdminLogin() {
 
         {/* Security Footer */}
         <div className="mt-10 flex items-center justify-center gap-6 opacity-30 grayscale">
-           <div className="text-[10px] font-bold uppercase tracking-[0.2em]">Verified SSL</div>
-           <div className="text-[10px] font-bold uppercase tracking-[0.2em]">End-to-End Encrypted</div>
-           <div className="text-[10px] font-bold uppercase tracking-[0.2em]">Authorized Personnel Only</div>
+          <div className="text-[10px] font-bold uppercase tracking-[0.2em]">
+            Verified SSL
+          </div>
+          <div className="text-[10px] font-bold uppercase tracking-[0.2em]">
+            End-to-End Encrypted
+          </div>
+          <div className="text-[10px] font-bold uppercase tracking-[0.2em]">
+            Authorized Personnel Only
+          </div>
         </div>
       </div>
     </div>
