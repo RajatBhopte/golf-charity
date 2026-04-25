@@ -1,12 +1,22 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { Search, Heart, HandCoins, Loader2 } from "lucide-react";
+import { Search, Heart, HandCoins, Loader2, Filter, Info, TrendingUp, Award } from "lucide-react";
+import { motion, AnimatePresence } from "framer-motion";
 import Navbar from "../components/Navbar";
 import Footer from "../components/Footer";
 import { useTheme } from "../context/ThemeContext";
 import { useAuth } from "../context/AuthContext";
 import api from "../utils/api";
 import { formatCurrencyINR } from "../utils/currency";
+
+const fadeInUp = {
+  hidden: { opacity: 0, y: 20 },
+  visible: { opacity: 1, y: 0, transition: { duration: 0.5, ease: "easeOut" } }
+};
+
+const stagger = {
+  visible: { transition: { staggerChildren: 0.05 } }
+};
 
 export default function Charities() {
   const { isDark } = useTheme();
@@ -126,274 +136,253 @@ export default function Charities() {
   };
 
   return (
-    <div className={`min-h-screen ${isDark ? "bg-dark-bg" : "bg-light-bg"}`}>
+    <div className={`min-h-screen ${isDark ? "bg-dark-bg text-white" : "bg-light-bg text-on-surface"}`}>
       <Navbar />
 
-      <main className="container-max px-4 sm:px-6 lg:px-8 pt-24 pb-12">
-        <div className="max-w-4xl mx-auto">
-          <section className="mb-6">
-            <h1
-              className={`text-2xl sm:text-3xl font-black tracking-tight ${
-                isDark ? "text-white" : "text-light-text"
-              }`}
-            >
-              Charity Directory
-            </h1>
-            <p
-              className={`mt-1.5 text-xs sm:text-sm ${
-                isDark ? "text-gray-400" : "text-light-subtext"
-              }`}
-            >
-              Discover vetted causes, filter by impact, and make one-time
-              donations anytime.
-            </p>
-          </section>
+      {/* Hero Section */}
+      <section className="relative pt-32 pb-20 overflow-hidden">
+        <div className="absolute inset-0 z-0">
+          <div className="mesh-gradient opacity-30 h-full"></div>
+          <div className={`absolute inset-0 ${isDark ? "bg-gradient-to-b from-transparent to-dark-bg" : "bg-gradient-to-b from-transparent to-light-bg"}`}></div>
+        </div>
 
-          <section
-            className={`rounded-xl border p-3.5 sm:p-4 mb-5 ${
-              isDark
-                ? "bg-dark-card border-dark-border"
-                : "bg-white border-light-border"
-            }`}
+        <div className="max-w-7xl mx-auto px-8 relative z-10">
+          <motion.div 
+            initial="hidden" 
+            animate="visible" 
+            variants={fadeInUp}
+            className="max-w-3xl"
           >
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-2.5">
-              <div className="md:col-span-2 relative">
-                <Search
-                  size={14}
-                  className={`absolute left-3 top-1/2 -translate-y-1/2 ${
-                    isDark ? "text-gray-500" : "text-gray-400"
-                  }`}
-                />
+            <h1 className="text-5xl md:text-7xl font-black tracking-tight mb-6 bg-clip-text text-transparent bg-gradient-to-r from-on-surface to-on-surface-variant leading-tight">
+              Impact at Every <br /> <span className="text-brand-500">Tee-Off.</span>
+            </h1>
+            <p className="text-xl text-on-surface-variant mb-10 leading-relaxed">
+              Discover verified global causes. Our precision-engineered platform ensures that every rupee contributed drives measurable, purposeful impact.
+            </p>
+
+            {/* Search Bar Widget */}
+            <div className="glass-card p-2 rounded-2xl flex flex-col md:flex-row items-stretch md:items-center gap-2 shadow-2xl shadow-brand-500/5 max-w-2xl border-brand-500/20">
+              <div className="flex-1 relative">
+                <Search size={20} className="absolute left-4 top-1/2 -translate-y-1/2 text-on-surface-variant" />
                 <input
+                  type="text"
                   value={query}
                   onChange={(e) => setQuery(e.target.value)}
-                  placeholder="Search by charity name"
-                  className={`w-full pl-8 pr-3 py-2 rounded-lg border text-xs sm:text-sm outline-none transition ${
-                    isDark
-                      ? "bg-dark-bg border-dark-border text-white placeholder:text-gray-500"
-                      : "bg-light-bg border-light-border text-light-text placeholder:text-gray-400"
-                  }`}
+                  placeholder="Search charities..."
+                  className="w-full pl-12 pr-4 py-3 bg-transparent outline-none text-on-surface"
                 />
               </div>
-
-              <input
-                type="number"
-                min="0"
-                value={minRaised}
-                onChange={(e) => setMinRaised(Number(e.target.value || 0))}
-                placeholder="Min raised"
-                className={`w-full px-3 py-2 rounded-lg border text-xs sm:text-sm outline-none transition ${
-                  isDark
-                    ? "bg-dark-bg border-dark-border text-white"
-                    : "bg-light-bg border-light-border text-light-text"
-                }`}
-              />
-
-              <label
-                className={`flex items-center justify-between px-3 py-2 rounded-lg border text-xs sm:text-sm ${
-                  isDark
-                    ? "border-dark-border text-gray-300"
-                    : "border-light-border text-light-subtext"
-                }`}
-              >
-                Spotlight only
-                <input
-                  type="checkbox"
-                  checked={spotlightOnly}
-                  onChange={(e) => setSpotlightOnly(e.target.checked)}
-                />
-              </label>
-            </div>
-
-            <div className="mt-2.5 flex items-center gap-2.5">
-              <button
+              <button 
                 onClick={fetchCharities}
-                className="btn-primary !px-4 !py-2 text-xs sm:text-sm"
-                disabled={loading}
+                className="bg-brand-500 hover:bg-brand-600 text-white px-8 py-3 rounded-xl font-bold transition-all flex items-center justify-center gap-2"
               >
-                {loading ? "Searching..." : "Apply Filters"}
+                {loading ? <Loader2 className="animate-spin" size={20} /> : <><Search size={20} /> Search</>}
               </button>
-              <span
-                className={`text-xs ${isDark ? "text-gray-500" : "text-gray-500"}`}
-              >
-                Spotlight results: {spotlightCount}
-              </span>
             </div>
-          </section>
+          </motion.div>
+        </div>
+      </section>
 
-          {error && (
-            <div className="mb-3.5 rounded-lg border border-red-300/40 bg-red-500/10 px-3.5 py-2.5 text-xs sm:text-sm text-red-500">
-              {error}
-            </div>
-          )}
-
-          {donationMsg && (
-            <div className="mb-3.5 rounded-lg border border-brand-300/40 bg-brand-500/10 px-3.5 py-2.5 text-xs sm:text-sm text-brand-500">
-              {donationMsg}
-            </div>
-          )}
-
-          {loading ? (
-            <div className="flex items-center justify-center py-16 text-brand-500">
-              <Loader2 className="animate-spin" size={24} />
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              {charities.map((charity) => (
-                <article
-                  key={charity.id}
-                  className={`rounded-xl border p-4 ${
-                    isDark
-                      ? "bg-dark-card border-dark-border"
-                      : "bg-white border-light-border"
-                  }`}
-                >
-                  <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <h2
-                        className={`text-base font-bold ${isDark ? "text-white" : "text-light-text"}`}
-                      >
-                        {charity.name}
-                      </h2>
-                      <p
-                        className={`text-xs sm:text-sm mt-1 ${isDark ? "text-gray-400" : "text-light-subtext"}`}
-                      >
-                        {charity.description || "No description available."}
-                      </p>
-                    </div>
-                    {charity.is_spotlight && (
-                      <span className="text-[9px] font-bold uppercase tracking-wide px-2 py-0.5 rounded-full bg-amber-400/20 text-amber-500">
-                        Spotlight
-                      </span>
-                    )}
-                  </div>
-
-                  <div className="mt-3 grid grid-cols-2 gap-2 text-[11px]">
-                    <div
-                      className={`rounded-lg px-2.5 py-1.5 ${
-                        isDark
-                          ? "bg-dark-bg text-gray-300"
-                          : "bg-light-bg text-light-subtext"
-                      }`}
-                    >
-                      <div className="opacity-70">Raised</div>
-                      <div className="font-semibold mt-0.5">
-                        {formatCurrencyINR(Number(charity.total_raised || 0))}
-                      </div>
-                    </div>
-                    <div
-                      className={`rounded-lg px-2.5 py-1.5 ${
-                        isDark
-                          ? "bg-dark-bg text-gray-300"
-                          : "bg-light-bg text-light-subtext"
-                      }`}
-                    >
-                      <div className="opacity-70">Subscribers</div>
-                      <div className="font-semibold mt-0.5">
-                        {charity.subscriber_count || 0}
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="mt-3 flex items-center gap-2">
+      <main className="max-w-7xl mx-auto px-8 pb-24 relative z-10">
+        <div className="flex flex-col lg:flex-row gap-12">
+          {/* Filters Sidebar */}
+          <aside className="w-full lg:w-72 flex-shrink-0">
+            <div className="sticky top-24 space-y-8">
+              <div>
+                <h3 className="text-sm font-black uppercase tracking-widest text-on-surface-variant mb-4 flex items-center gap-2">
+                  <Filter size={16} /> Filters
+                </h3>
+                <div className="space-y-4">
+                  <div className="space-y-2">
+                    <label className="text-sm font-bold text-on-surface">Min. Raised (₹)</label>
                     <input
                       type="number"
-                      min="1"
-                      placeholder="Amount"
-                      value={donationValues[charity.id] || ""}
-                      onChange={(e) =>
-                        setDonationValues((prev) => ({
-                          ...prev,
-                          [charity.id]: e.target.value,
-                        }))
-                      }
-                      className={`flex-1 px-3 py-1.5 rounded-lg border text-xs sm:text-sm outline-none ${
-                        isDark
-                          ? "bg-dark-bg border-dark-border text-white"
-                          : "bg-light-bg border-light-border text-light-text"
-                      }`}
+                      value={minRaised}
+                      onChange={(e) => setMinRaised(Number(e.target.value || 0))}
+                      className="w-full bg-brand-500/5 border border-brand-500/10 rounded-xl px-4 py-2 outline-none focus:border-brand-500/40 transition-colors"
+                      placeholder="0"
                     />
-                    <button
-                      onClick={() => submitDonation(charity.id)}
-                      disabled={donatingId === charity.id}
-                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-brand-500 hover:bg-brand-600 text-white text-xs sm:text-sm font-semibold disabled:opacity-70"
-                    >
-                      {donatingId === charity.id ? (
-                        <Loader2 size={15} className="animate-spin" />
-                      ) : (
-                        <HandCoins size={15} />
-                      )}
-                      Donate
-                    </button>
                   </div>
-                </article>
-              ))}
-            </div>
-          )}
-
-          {!loading && charities.length === 0 && (
-            <div
-              className={`rounded-xl border p-6 text-center ${
-                isDark
-                  ? "bg-dark-card border-dark-border text-gray-400"
-                  : "bg-white border-light-border text-light-subtext"
-              }`}
-            >
-              <Heart className="mx-auto mb-3 text-brand-500" size={22} />
-              <p className="font-medium text-sm">
-                No charities match these filters right now.
-              </p>
-            </div>
-          )}
-
-          {!session?.access_token && (
-            <div
-              className={`mt-5 rounded-xl border p-3.5 text-xs sm:text-sm ${
-                isDark
-                  ? "bg-dark-card border-dark-border text-gray-300"
-                  : "bg-white border-light-border text-light-subtext"
-              }`}
-            >
-              To make a donation, please{" "}
-              <Link to="/login" className="text-brand-500 font-semibold">
-                log in
-              </Link>{" "}
-              first.
-            </div>
-          )}
-
-          {session?.access_token && donations.length > 0 && (
-            <section
-              className={`mt-5 rounded-xl border p-4 ${
-                isDark
-                  ? "bg-dark-card border-dark-border"
-                  : "bg-white border-light-border"
-              }`}
-            >
-              <h3
-                className={`text-sm sm:text-base font-bold mb-2.5 ${isDark ? "text-white" : "text-light-text"}`}
-              >
-                Your Recent Donations
-              </h3>
-              <div className="space-y-1.5">
-                {donations.slice(0, 5).map((entry) => (
-                  <div
-                    key={entry.id}
-                    className={`flex items-center justify-between rounded-lg px-2.5 py-1.5 text-xs sm:text-sm ${
-                      isDark
-                        ? "bg-dark-bg text-gray-300"
-                        : "bg-light-bg text-light-subtext"
-                    }`}
+                  <label className="flex items-center justify-between p-3 rounded-xl bg-brand-500/5 border border-brand-500/10 cursor-pointer hover:border-brand-500/30 transition-all">
+                    <span className="text-sm font-bold">Spotlight Only</span>
+                    <input
+                      type="checkbox"
+                      checked={spotlightOnly}
+                      onChange={(e) => setSpotlightOnly(e.target.checked)}
+                      className="w-5 h-5 accent-brand-500"
+                    />
+                  </label>
+                  <button 
+                    onClick={fetchCharities}
+                    className="w-full py-2 bg-on-surface text-surface-bright rounded-xl font-bold text-sm hover:opacity-90 transition-opacity"
                   >
-                    <span className="truncate pr-3">{entry.charity_name}</span>
-                    <span className="font-semibold">
-                      {formatCurrencyINR(Number(entry.amount || 0))}
-                    </span>
-                  </div>
-                ))}
+                    Apply Filters
+                  </button>
+                </div>
               </div>
-            </section>
-          )}
+
+              {/* Stats Widget */}
+              <div className="glass-card p-6 rounded-2xl border-brand-500/10">
+                <h4 className="text-xs font-black text-brand-500 uppercase tracking-widest mb-4">Network Activity</h4>
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-on-surface-variant">Featured</span>
+                    <span className="font-bold text-on-surface">{spotlightCount}</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-on-surface-variant">Total Causes</span>
+                    <span className="font-bold text-on-surface">{charities.length}</span>
+                  </div>
+                </div>
+              </div>
+
+              {session?.access_token && donations.length > 0 && (
+                <div className="glass-card p-6 rounded-2xl border-brand-500/10">
+                  <h4 className="text-xs font-black text-brand-500 uppercase tracking-widest mb-4">Your Recent Impact</h4>
+                  <div className="space-y-3">
+                    {donations.slice(0, 3).map((entry) => (
+                      <div key={entry.id} className="flex flex-col gap-0.5">
+                        <span className="text-xs font-bold truncate text-on-surface">{entry.charity_name}</span>
+                        <span className="text-[10px] font-medium text-brand-500">{formatCurrencyINR(Number(entry.amount || 0))}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          </aside>
+
+          {/* Charity Grid */}
+          <div className="flex-1">
+            {error && (
+              <div className="mb-8 p-4 rounded-2xl bg-red-500/10 border border-red-500/20 text-red-500 flex items-center gap-3">
+                <Info size={20} /> {error}
+              </div>
+            )}
+
+            {donationMsg && (
+              <div className="mb-8 p-4 rounded-2xl bg-brand-500/10 border border-brand-500/20 text-brand-500 flex items-center gap-3">
+                <Heart size={20} className="fill-current" /> {donationMsg}
+              </div>
+            )}
+
+            <motion.div 
+              initial="hidden"
+              animate="visible"
+              variants={stagger}
+              className="grid grid-cols-1 md:grid-cols-2 gap-6"
+            >
+              <AnimatePresence mode='popLayout'>
+                {charities.map((charity) => (
+                  <motion.article
+                    layout
+                    key={charity.id}
+                    variants={fadeInUp}
+                    whileHover={{ y: -4 }}
+                    className="glass-card rounded-3xl overflow-hidden flex flex-col group h-full border-brand-500/5"
+                  >
+                    {/* Card Header/Image Area */}
+                    <div className="h-48 w-full relative bg-brand-500/10 overflow-hidden">
+                      {charity.image_url ? (
+                        <img 
+                          src={charity.image_url} 
+                          alt={charity.name} 
+                          className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110" 
+                        />
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center opacity-20">
+                          <Heart size={48} />
+                        </div>
+                      )}
+                      
+                      <div className="absolute top-4 left-4 flex gap-2">
+                        {charity.is_spotlight && (
+                          <div className="bg-brand-500 text-white px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest shadow-lg shadow-brand-500/20 flex items-center gap-1">
+                            <Award size={12} /> Spotlight
+                          </div>
+                        )}
+                        <div className="bg-black/40 backdrop-blur-md text-white px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest border border-white/10">
+                          Vetted
+                        </div>
+                      </div>
+
+                      <div className="absolute bottom-4 left-4 right-4 flex items-center justify-between">
+                         <div className="bg-black/60 backdrop-blur-md px-3 py-1.5 rounded-xl border border-white/10 flex items-center gap-2">
+                            <TrendingUp size={14} className="text-brand-500" />
+                            <span className="text-white text-xs font-bold">{formatCurrencyINR(charity.total_raised || 0)} <span className="opacity-50 font-medium">RAISED</span></span>
+                         </div>
+                      </div>
+                    </div>
+
+                    {/* Card Content */}
+                    <div className="p-8 flex flex-col flex-1">
+                      <h2 className="text-2xl font-bold text-on-surface mb-3 tracking-tight group-hover:text-brand-500 transition-colors">
+                        {charity.name}
+                      </h2>
+                      <p className="text-on-surface-variant text-sm leading-relaxed mb-8 line-clamp-3">
+                        {charity.description || "Leading transformation through purposeful community engagement and sustainable engineering."}
+                      </p>
+
+                      {/* Quick Donate Widget */}
+                      <div className="mt-auto space-y-4">
+                        <div className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-on-surface-variant opacity-60">
+                           <HandCoins size={12} /> Support this cause
+                        </div>
+                        <div className="flex items-center gap-3">
+                          <div className="flex-1 relative">
+                            <span className="absolute left-4 top-1/2 -translate-y-1/2 text-xs font-bold text-on-surface-variant">₹</span>
+                            <input
+                              type="number"
+                              min="1"
+                              placeholder="500"
+                              value={donationValues[charity.id] || ""}
+                              onChange={(e) =>
+                                setDonationValues((prev) => ({
+                                  ...prev,
+                                  [charity.id]: e.target.value,
+                                }))
+                              }
+                              className="w-full pl-8 pr-4 py-3 bg-brand-500/5 border border-brand-500/10 rounded-xl text-sm font-bold outline-none focus:border-brand-500/40 transition-all"
+                            />
+                          </div>
+                          <button
+                            onClick={() => submitDonation(charity.id)}
+                            disabled={donatingId === charity.id}
+                            className="bg-on-surface text-surface-bright p-3.5 rounded-xl hover:bg-brand-500 hover:text-white transition-all disabled:opacity-50"
+                          >
+                            {donatingId === charity.id ? (
+                              <Loader2 size={18} className="animate-spin" />
+                            ) : (
+                              <Heart size={18} />
+                            )}
+                          </button>
+                        </div>
+                        {!session?.access_token && (
+                          <p className="text-[10px] text-on-surface-variant text-center italic">Log in to enable quick donations</p>
+                        )}
+                      </div>
+                    </div>
+                  </motion.article>
+                ))}
+              </AnimatePresence>
+
+              {charities.length === 0 && !loading && (
+                <div className="col-span-full py-24 text-center">
+                  <div className="w-20 h-20 bg-brand-500/10 rounded-full flex items-center justify-center mx-auto mb-6 text-brand-500">
+                    <Heart size={40} />
+                  </div>
+                  <h3 className="text-2xl font-bold text-on-surface mb-2">No charities found</h3>
+                  <p className="text-on-surface-variant max-w-sm mx-auto">Try adjusting your filters or search keywords to find a cause to support.</p>
+                  <button 
+                    onClick={() => { setQuery(""); setMinRaised(0); setSpotlightOnly(false); fetchCharities(); }}
+                    className="mt-8 text-brand-500 font-bold border-b-2 border-brand-500/20 hover:border-brand-500 transition-all"
+                  >
+                    Clear all filters
+                  </button>
+                </div>
+              )}
+            </motion.div>
+          </div>
         </div>
       </main>
 

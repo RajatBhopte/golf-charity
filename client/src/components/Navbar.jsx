@@ -12,7 +12,8 @@ export default function Navbar({ variant = "public" }) {
   // Links for the public landing page
   const publicLinks = [
     { name: "How It Works", href: "/#how-it-works" },
-    { name: "Prizes", href: "/#prizes" },
+    // { name: "Prizes", href: "/#prizes" },
+    { name: "Pricing", href: "/#pricing" },
     { name: "Charities", href: "/charities" },
   ];
 
@@ -44,14 +45,14 @@ export default function Navbar({ variant = "public" }) {
       <div className="container-max px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-16 lg:h-20">
           {/* Logo */}
-          <Link to="/" className="flex items-center gap-2 group">
-            <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-brand-400 to-brand-600 flex items-center justify-center shadow-lg shadow-brand-500/20 group-hover:shadow-brand-500/40 transition-shadow">
-              <span className="text-white font-bold text-lg">S</span>
+          <Link to="/" className="flex items-center gap-2 group font-inter">
+            <div className="w-9 h-9 rounded-xl bg-brand-500 flex items-center justify-center shadow-lg shadow-brand-500/20 group-hover:shadow-brand-500/40 transition-shadow">
+              <span className="text-white font-black text-lg">S</span>
             </div>
             <span
-              className={`text-xl font-bold tracking-tight ${isDark ? "text-white" : "text-light-text"}`}
+              className={`text-xl font-black tracking-tighter ${isDark ? "text-white" : "text-on-surface"}`}
             >
-              Swing<span className="gradient-text">Save</span>
+              SwingSave
             </span>
           </Link>
 
@@ -62,10 +63,10 @@ export default function Navbar({ variant = "public" }) {
                 <Link
                   key={link.name}
                   to={link.href}
-                  className={`text-sm font-medium transition-colors duration-200 ${
+                  className={`text-sm font-bold transition-colors duration-200 ${
                     isDark
                       ? "text-gray-400 hover:text-white"
-                      : "text-light-subtext hover:text-light-text"
+                      : "text-on-surface-variant hover:text-brand-500"
                   }`}
                 >
                   {link.name}
@@ -74,10 +75,10 @@ export default function Navbar({ variant = "public" }) {
                 <a
                   key={link.name}
                   href={link.href}
-                  className={`text-sm font-medium transition-colors duration-200 ${
+                  className={`text-sm font-bold transition-colors duration-200 ${
                     isDark
                       ? "text-gray-400 hover:text-white"
-                      : "text-light-subtext hover:text-light-text"
+                      : "text-on-surface-variant hover:text-brand-500"
                   }`}
                 >
                   {link.name}
@@ -93,8 +94,8 @@ export default function Navbar({ variant = "public" }) {
               onClick={toggleTheme}
               className={`p-2.5 rounded-xl transition-all duration-300 ${
                 isDark
-                  ? "bg-dark-card hover:bg-dark-hover text-gray-400 hover:text-yellow-400"
-                  : "bg-light-hover hover:bg-gray-200 text-light-subtext hover:text-amber-500"
+                  ? "bg-dark-card hover:bg-dark-hover text-gray-400 hover:text-brand-500"
+                  : "bg-light-hover hover:bg-gray-200 text-on-surface-variant hover:text-brand-500"
               }`}
               aria-label="Toggle theme"
             >
@@ -105,10 +106,10 @@ export default function Navbar({ variant = "public" }) {
               <>
                 <Link
                   to="/dashboard"
-                  className={`px-5 py-2.5 text-sm font-medium rounded-xl transition-all duration-300 ${
+                  className={`px-5 py-2.5 text-sm font-bold rounded-xl transition-all duration-300 ${
                     isDark
                       ? "text-gray-300 hover:text-white hover:bg-dark-card"
-                      : "text-light-subtext hover:text-light-text hover:bg-light-hover"
+                      : "text-on-surface-variant hover:text-on-surface hover:bg-light-hover"
                   }`}
                 >
                   Dashboard
@@ -116,9 +117,9 @@ export default function Navbar({ variant = "public" }) {
                 <button
                   onClick={async () => {
                     await logout();
-                    window.location.href = "/login"; // Optional based on standard practice for your app
+                    window.location.href = "/login";
                   }}
-                  className="btn-primary !bg-red-500 hover:!bg-red-600 !border-red-500 !px-6 !py-2.5 text-sm"
+                  className="bg-red-500 hover:bg-red-600 text-white px-6 py-2.5 text-sm font-bold rounded-xl transition-all active:scale-95 shadow-lg shadow-red-500/20"
                 >
                   Log Out
                 </button>
@@ -127,19 +128,19 @@ export default function Navbar({ variant = "public" }) {
               <>
                 <Link
                   to="/login"
-                  className={`px-5 py-2.5 text-sm font-medium rounded-xl transition-all duration-300 ${
+                  className={`px-5 py-2.5 text-sm font-bold rounded-xl transition-all duration-300 ${
                     isDark
                       ? "text-gray-300 hover:text-white hover:bg-dark-card"
-                      : "text-light-subtext hover:text-light-text hover:bg-light-hover"
+                      : "text-on-surface-variant hover:text-on-surface hover:bg-light-hover"
                   }`}
                 >
                   Log In
                 </Link>
                 <Link
-                  to="/get-started"
-                  className="btn-primary !px-6 !py-2.5 text-sm"
+                  to="/signup"
+                  className="bg-brand-500 text-white px-6 py-2.5 text-sm font-bold rounded-full transition-all active:scale-95 shadow-lg shadow-brand-500/20"
                 >
-                  Get Started
+                  Join the Draw
                 </Link>
               </>
             ) : null}
