@@ -133,7 +133,7 @@ export default function UserSidebar({
             </div>
             <div>
               <h1 className="font-extrabold text-lg leading-tight tracking-tight font-sans">
-                Golf<span className="gradient-text">Charity</span>
+                Swing<span className="gradient-text">Save</span>
               </h1>
               <p className="text-[10px] text-gray-500 font-bold uppercase tracking-widest mt-0.5">
                 Player Terminal

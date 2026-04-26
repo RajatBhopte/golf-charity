@@ -26,6 +26,34 @@ export default function Home() {
   const [charities, setCharities] = useState([]);
   const [featuredCharity, setFeaturedCharity] = useState(null);
   const [isYearly, setIsYearly] = useState(false);
+  const [timeLeft, setTimeLeft] = useState({ days: 0, hours: 0, mins: 0, secs: 0 });
+
+  useEffect(() => {
+    // Set target date to the end of the current month
+    const now = new Date();
+    const targetDate = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59);
+
+    const updateTimer = () => {
+      const currentTime = new Date();
+      const difference = targetDate - currentTime;
+
+      if (difference <= 0) {
+        setTimeLeft({ days: 0, hours: 0, mins: 0, secs: 0 });
+        return;
+      }
+
+      setTimeLeft({
+        days: Math.floor(difference / (1000 * 60 * 60 * 24)),
+        hours: Math.floor((difference / (1000 * 60 * 60)) % 24),
+        mins: Math.floor((difference / 1000 / 60) % 60),
+        secs: Math.floor((difference / 1000) % 60),
+      });
+    };
+
+    updateTimer();
+    const timer = setInterval(updateTimer, 1000);
+    return () => clearInterval(timer);
+  }, []);
 
   useEffect(() => {
     if (loading || !session?.user) return;
@@ -90,14 +118,15 @@ export default function Home() {
         <section className="relative h-[85vh] flex items-center overflow-hidden">
           <div className="absolute inset-0 z-0">
             <motion.img 
-              initial={{ scale: 1.1, opacity: 0 }}
-              animate={{ scale: 1, opacity: isDark ? 0.7 : 1 }}
-              transition={{ duration: 1.5 }}
+              initial={{ opacity: 0, scale: 1.05 }}
+              animate={{ opacity: isDark ? 0.9 : 1, scale: 1 }}
+              transition={{ duration: 0.8 }}
               className="w-full h-full object-cover"
-              src="https://lh3.googleusercontent.com/aida-public/AB6AXuB27Djp4yu2-McKQWQcjfb7DQKYpxCbrLbv7GEQ49Jcu8vXZZ_BLivLf2WMwWFf_mI1nhmj24CaInpB3DnFUDIuc9WNg1FUltSFnJJUpB0SEi4ld6OjbThPeYfBjwgy9uOp23hoQIbN1kOQsNeIjuvm0AlkvxCWcQyF59bGszNFyEeX7PTAkBmB-kgvmTuitEJ9Q0_WMsGEBcaG-ycegbSBCVfbb9ruufkwRYqJwVrx3yX0Tw1OFmbHDW9XbOdxNC75vC9a8K4m__Sq" 
-              alt="Golf course hero"
+              src="https://images.unsplash.com/photo-1535131749006-b7f58c99034b?auto=format&fit=crop&q=80&w=2000" 
+              alt="Premium Golf Experience"
+              loading="eager"
             />
-            <div className={`absolute inset-0 bg-gradient-to-t ${isDark ? "from-dark-bg via-dark-bg/40" : "from-surface/60 via-surface/10"} to-transparent`}></div>
+            <div className={`absolute inset-0 bg-gradient-to-t ${isDark ? "from-dark-bg via-dark-bg/20" : "from-surface/60 via-surface/10"} to-transparent`}></div>
           </div>
           
           <div className="relative z-10 max-w-7xl mx-auto px-8 w-full">
@@ -339,7 +368,7 @@ export default function Home() {
               whileInView={{ x: 0, opacity: 1 }}
               viewport={{ once: true }}
             >
-              <h2 className="text-4xl md:text-6xl font-black text-on-surface mb-8 tracking-tighter leading-tight">Intelligence meets <span className="text-brand-500 italic">Elegance</span>.</h2>
+              <h2 className="text-4xl md:text-6xl font-black text-on-surface mb-8 tracking-tighter leading-tight">Intelligence meets <span className="text-brand-500">Elegance</span>.</h2>
               <ul className="space-y-8">
                 {[
                   { icon: "query_stats", title: "Precision Analytics", desc: "Track every drive, putt, and eagle with forensic accuracy across 40,000 global courses." },
@@ -376,23 +405,7 @@ export default function Home() {
               viewport={{ once: true }}
               className="relative group"
             >
-              {/* Scrolling Rollover Banner */}
-              <div className="absolute -top-6 left-1/2 -translate-x-1/2 z-20 w-full max-w-lg">
-                <div className="bg-brand-500 text-white py-2 px-6 rounded-full shadow-2xl shadow-brand-500/40 border border-white/20 overflow-hidden relative">
-                  <motion.div 
-                    animate={{ x: [0, -200] }}
-                    transition={{ duration: 10, repeat: Infinity, ease: "linear" }}
-                    className="whitespace-nowrap flex gap-8 items-center"
-                  >
-                    {[1, 2, 3, 4].map((i) => (
-                      <span key={i} className="text-[10px] font-black uppercase tracking-[0.3em] flex items-center gap-2">
-                        <span className="w-1.5 h-1.5 bg-white rounded-full animate-ping"></span>
-                        Active Jackpot Rollover • 3X Multiplier
-                      </span>
-                    ))}
-                  </motion.div>
-                </div>
-              </div>
+           
 
               <div className="glass-card p-12 md:p-16 rounded-[3rem] border-white/10 overflow-hidden relative shadow-[0_0_100px_rgba(8,145,178,0.15)] bg-slate-900/80 backdrop-blur-3xl">
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-16 items-center">
@@ -407,14 +420,14 @@ export default function Home() {
                     </div>
                     
                     {/* Digital Countdown */}
-                    <div className="flex gap-4">
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
                       {[
-                        { label: 'Days', val: '04' },
-                        { label: 'Hours', val: '12' },
-                        { label: 'Mins', val: '45' },
-                        { label: 'Secs', val: '22' }
+                        { label: 'Days', val: String(timeLeft.days).padStart(2, '0') },
+                        { label: 'Hours', val: String(timeLeft.hours).padStart(2, '0') },
+                        { label: 'Mins', val: String(timeLeft.mins).padStart(2, '0') },
+                        { label: 'Secs', val: String(timeLeft.secs).padStart(2, '0') }
                       ].map((t) => (
-                        <div key={t.label} className="flex-1 bg-white/5 border border-white/10 p-5 rounded-2xl text-center backdrop-blur-md">
+                        <div key={t.label} className="bg-white/5 border border-white/10 p-4 sm:p-5 rounded-2xl text-center backdrop-blur-md">
                           <div className="text-3xl md:text-4xl font-black text-brand-500 tracking-tighter mb-1 font-mono">{t.val}</div>
                           <div className="text-[9px] text-slate-500 font-black uppercase tracking-widest">{t.label}</div>
                         </div>
@@ -534,8 +547,13 @@ export default function Home() {
         {/* Final CTA Section */}
         <section className="relative py-40 overflow-hidden mt-20">
           <div className="absolute inset-0 z-0">
-            <img className="w-full h-full object-cover" src="https://lh3.googleusercontent.com/aida-public/AB6AXuB27Djp4yu2-McKQWQcjfb7DQKYpxCbrLbv7GEQ49Jcu8vXZZ_BLivLf2WMwWFf_mI1nhmj24CaInpB3DnFUDIuc9WNg1FUltSFnJJUpB0SEi4ld6OjbThPeYfBjwgy9uOp23hoQIbN1kOQsNeIjuvm0AlkvxCWcQyF59bGszNFyEeX7PTAkBmB-kgvmTuitEJ9Q0_WMsGEBcaG-ycegbSBCVfbb9ruufkwRYqJwVrx3yX0Tw1OFmbHDW9XbOdxNC75vC9a8K4m__Sq" alt="CTA BG" />
-            <div className={`absolute inset-0 ${isDark ? "bg-dark-bg/80" : "bg-black/40"} backdrop-blur-sm`}></div>
+            <img 
+              className="w-full h-full object-cover" 
+              src="https://images.unsplash.com/photo-1593111774240-d529f12cf4bb?auto=format&fit=crop&q=80&w=2076" 
+              alt="CTA BG" 
+              loading="lazy"
+            />
+            <div className={`absolute inset-0 ${isDark ? "bg-dark-bg/50" : "bg-black/40"} backdrop-blur-sm`}></div>
           </div>
           <div className="relative z-10 max-w-4xl mx-auto px-8 text-center text-white">
             <motion.h2 

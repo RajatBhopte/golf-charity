@@ -11,6 +11,29 @@
     box-sizing: border-box;
   }
 
+  /* Theme Variables */
+  :root {
+    --on-surface: #191c20;
+    --on-surface-variant: #424941;
+    --surface: #f7f9fb;
+    --surface-container-low: #f2f4f6;
+    --surface-container-high: #e8eaec;
+    --surface-container-highest: #e2e2e6;
+    --surface-bright: #f7f9fb;
+    --surface-dim: #d8dadc;
+  }
+
+  .dark {
+    --on-surface: #e2e8f0;
+    --on-surface-variant: #94a3b8;
+    --surface: #111827;
+    --surface-container-low: #1f2937;
+    --surface-container-high: #374151;
+    --surface-container-highest: #4b5563;
+    --surface-bright: #1f2937;
+    --surface-dim: #0a0f1a;
+  }
+
   html {
     scroll-behavior: smooth;
   }
@@ -25,14 +48,14 @@
   html.dark,
   html.dark body {
     background-color: #0a0f1a;
-    color: #e2e8f0;
+    color: var(--on-surface);
   }
 
   /* Light mode */
   html:not(.dark),
   html:not(.dark) body {
     background-color: #f8fafc;
-    color: #0f172a;
+    color: var(--on-surface);
   }
 }
 
